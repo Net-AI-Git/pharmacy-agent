@@ -252,3 +252,5 @@ except ValidationError as e:
 4. **Use model_dump()**: Use `model_dump()` instead of `dict()` for serialization
 5. **ISO date format**: Always use ISO 8601 format for date strings
 
+
+
