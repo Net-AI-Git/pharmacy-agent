@@ -1,0 +1,204 @@
+{
+  "users": [
+    {
+      "user_id": "user_001",
+      "name": "John Doe",
+      "email": "john.doe@example.com",
+      "prescriptions": ["prescription_001"]
+    },
+    {
+      "user_id": "user_002",
+      "name": "Jane Smith",
+      "email": "jane.smith@example.com",
+      "prescriptions": ["prescription_002"]
+    },
+    {
+      "user_id": "user_003",
+      "name": "Michael Johnson",
+      "email": "michael.johnson@example.com",
+      "prescriptions": ["prescription_003"]
+    },
+    {
+      "user_id": "user_004",
+      "name": "Sarah Williams",
+      "email": "sarah.williams@example.com",
+      "prescriptions": ["prescription_004"]
+    },
+    {
+      "user_id": "user_005",
+      "name": "David Brown",
+      "email": "david.brown@example.com",
+      "prescriptions": ["prescription_005"]
+    },
+    {
+      "user_id": "user_006",
+      "name": "Emily Davis",
+      "email": "emily.davis@example.com",
+      "prescriptions": []
+    },
+    {
+      "user_id": "user_007",
+      "name": "Robert Miller",
+      "email": "robert.miller@example.com",
+      "prescriptions": []
+    },
+    {
+      "user_id": "user_008",
+      "name": "Lisa Wilson",
+      "email": "lisa.wilson@example.com",
+      "prescriptions": []
+    },
+    {
+      "user_id": "user_009",
+      "name": "James Moore",
+      "email": "james.moore@example.com",
+      "prescriptions": []
+    },
+    {
+      "user_id": "user_010",
+      "name": "Mary Taylor",
+      "email": "mary.taylor@example.com",
+      "prescriptions": []
+    }
+  ],
+  "medications": [
+    {
+      "medication_id": "med_001",
+      "name_he": "Acamol",
+      "name_en": "Acetaminophen",
+      "active_ingredients": ["Paracetamol 500mg"],
+      "dosage_forms": ["Tablets", "Capsules"],
+      "dosage_instructions": "500-1000mg every 4-6 hours, maximum 4g per day",
+      "usage_instructions": "Take with or after food. Can be taken up to 4 times per day as needed",
+      "requires_prescription": false,
+      "description": "Pain reliever and fever reducer",
+      "stock": {
+        "available": true,
+        "quantity_in_stock": 150,
+        "last_restocked": "2024-01-15T10:30:00Z"
+      }
+    },
+    {
+      "medication_id": "med_002",
+      "name_he": "Aspirin",
+      "name_en": "Aspirin",
+      "active_ingredients": ["Acetylsalicylic acid 100mg"],
+      "dosage_forms": ["Tablets"],
+      "dosage_instructions": "100-300mg once daily or as directed by physician",
+      "usage_instructions": "Take with a full glass of water. Best taken with food to reduce stomach irritation",
+      "requires_prescription": false,
+      "description": "Anti-inflammatory and blood thinner",
+      "stock": {
+        "available": true,
+        "quantity_in_stock": 200,
+        "last_restocked": "2024-01-20T14:00:00Z"
+      }
+    },
+    {
+      "medication_id": "med_003",
+      "name_he": "Amoxicillin",
+      "name_en": "Amoxicillin",
+      "active_ingredients": ["Amoxicillin 500mg"],
+      "dosage_forms": ["Capsules", "Tablets"],
+      "dosage_instructions": "500mg three times daily (every 8 hours) for 7-10 days",
+      "usage_instructions": "Take at regular intervals. Complete the full course even if symptoms improve",
+      "requires_prescription": true,
+      "description": "Antibiotic for bacterial infections",
+      "stock": {
+        "available": true,
+        "quantity_in_stock": 75,
+        "last_restocked": "2024-01-18T09:15:00Z"
+      }
+    },
+    {
+      "medication_id": "med_004",
+      "name_he": "Ibuprofen",
+      "name_en": "Ibuprofen",
+      "active_ingredients": ["Ibuprofen 400mg"],
+      "dosage_forms": ["Tablets", "Capsules"],
+      "dosage_instructions": "400-600mg every 6-8 hours, maximum 2400mg per day",
+      "usage_instructions": "Take with food or milk to reduce stomach upset. Do not exceed recommended dose",
+      "requires_prescription": false,
+      "description": "Non-steroidal anti-inflammatory drug (NSAID) for pain and inflammation",
+      "stock": {
+        "available": true,
+        "quantity_in_stock": 120,
+        "last_restocked": "2024-01-22T11:45:00Z"
+      }
+    },
+    {
+      "medication_id": "med_005",
+      "name_he": "Metformin",
+      "name_en": "Metformin",
+      "active_ingredients": ["Metformin hydrochloride 500mg"],
+      "dosage_forms": ["Tablets"],
+      "dosage_instructions": "500mg twice daily with meals, may increase to 1000mg twice daily",
+      "usage_instructions": "Take with meals to reduce gastrointestinal side effects. Start with lower dose",
+      "requires_prescription": true,
+      "description": "Oral medication for type 2 diabetes management",
+      "stock": {
+        "available": false,
+        "quantity_in_stock": 0,
+        "last_restocked": "2024-01-10T08:00:00Z"
+      }
+    }
+  ],
+  "prescriptions": [
+    {
+      "prescription_id": "prescription_001",
+      "user_id": "user_001",
+      "medication_id": "med_003",
+      "prescribed_by": "Dr. Sarah Levy",
+      "prescription_date": "2024-01-10T09:00:00Z",
+      "expiry_date": "2024-04-10T09:00:00Z",
+      "quantity": 30,
+      "refills_remaining": 2,
+      "status": "active"
+    },
+    {
+      "prescription_id": "prescription_002",
+      "user_id": "user_002",
+      "medication_id": "med_005",
+      "prescribed_by": "Dr. Michael Cohen",
+      "prescription_date": "2024-01-11T09:00:00Z",
+      "expiry_date": "2024-04-11T09:00:00Z",
+      "quantity": 60,
+      "refills_remaining": 1,
+      "status": "active"
+    },
+    {
+      "prescription_id": "prescription_003",
+      "user_id": "user_003",
+      "medication_id": "med_003",
+      "prescribed_by": "Dr. Rachel Green",
+      "prescription_date": "2024-01-12T09:00:00Z",
+      "expiry_date": "2024-04-12T09:00:00Z",
+      "quantity": 30,
+      "refills_remaining": 0,
+      "status": "active"
+    },
+    {
+      "prescription_id": "prescription_004",
+      "user_id": "user_004",
+      "medication_id": "med_005",
+      "prescribed_by": "Dr. David Brown",
+      "prescription_date": "2024-01-13T09:00:00Z",
+      "expiry_date": "2024-04-13T09:00:00Z",
+      "quantity": 90,
+      "refills_remaining": 2,
+      "status": "active"
+    },
+    {
+      "prescription_id": "prescription_005",
+      "user_id": "user_005",
+      "medication_id": "med_003",
+      "prescribed_by": "Dr. Sarah Levy",
+      "prescription_date": "2024-01-14T09:00:00Z",
+      "expiry_date": "2024-04-14T09:00:00Z",
+      "quantity": 30,
+      "refills_remaining": 1,
+      "status": "active"
+    }
+  ]
+}
+

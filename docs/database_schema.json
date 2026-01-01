@@ -1,0 +1,214 @@
+{
+  "schema_version": "1.0",
+  "description": "JSON schema for pharmacy database structure",
+  "structure": {
+    "users": {
+      "type": "array",
+      "description": "List of 10 users",
+      "items": {
+        "user_id": {
+          "type": "string",
+          "description": "Unique user identifier",
+          "example": "user_001"
+        },
+        "name": {
+          "type": "string",
+          "description": "User full name",
+          "example": "John Doe"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address",
+          "example": "john.doe@example.com"
+        },
+        "prescriptions": {
+          "type": "array",
+          "description": "List of prescription IDs belonging to the user",
+          "items": {
+            "type": "string"
+          },
+          "example": ["prescription_001", "prescription_002"]
+        }
+      }
+    },
+    "medications": {
+      "type": "array",
+      "description": "List of 5 medications",
+      "items": {
+        "medication_id": {
+          "type": "string",
+          "description": "Unique medication identifier",
+          "example": "med_001"
+        },
+        "name_he": {
+          "type": "string",
+          "description": "Medication name in Hebrew",
+          "example": "Acamol"
+        },
+        "name_en": {
+          "type": "string",
+          "description": "Medication name in English",
+          "example": "Acetaminophen"
+        },
+        "active_ingredients": {
+          "type": "array",
+          "description": "List of active ingredients (required)",
+          "required": true,
+          "items": {
+            "type": "string"
+          },
+          "example": ["Paracetamol 500mg"]
+        },
+        "dosage_forms": {
+          "type": "array",
+          "description": "Available dosage forms",
+          "items": {
+            "type": "string"
+          },
+          "example": ["Tablets", "Capsules", "Syrup"]
+        },
+        "dosage_instructions": {
+          "type": "string",
+          "description": "Detailed dosage instructions (required)",
+          "required": true,
+          "example": "500-1000mg every 4-6 hours, maximum 4g per day"
+        },
+        "usage_instructions": {
+          "type": "string",
+          "description": "Usage instructions - when to take, how many times per day",
+          "example": "Take with or after food. Can be taken up to 4 times per day as needed"
+        },
+        "requires_prescription": {
+          "type": "boolean",
+          "description": "Whether the medication requires a doctor's prescription",
+          "example": false
+        },
+        "description": {
+          "type": "string",
+          "description": "Medication description",
+          "example": "Pain reliever and fever reducer"
+        },
+        "stock": {
+          "type": "object",
+          "description": "Stock information",
+          "properties": {
+            "available": {
+              "type": "boolean",
+              "description": "Whether the medication is available in stock"
+            },
+            "quantity_in_stock": {
+              "type": "integer",
+              "description": "Quantity available in stock"
+            },
+            "last_restocked": {
+              "type": "string",
+              "description": "Last restock date (ISO format)",
+              "format": "date-time"
+            }
+          },
+          "example": {
+            "available": true,
+            "quantity_in_stock": 150,
+            "last_restocked": "2024-01-15T10:30:00Z"
+          }
+        }
+      }
+    },
+    "prescriptions": {
+      "type": "array",
+      "description": "List of prescriptions",
+      "items": {
+        "prescription_id": {
+          "type": "string",
+          "description": "Unique prescription identifier",
+          "example": "prescription_001"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "User identifier",
+          "example": "user_001"
+        },
+        "medication_id": {
+          "type": "string",
+          "description": "Medication identifier",
+          "example": "med_001"
+        },
+        "prescribed_by": {
+          "type": "string",
+          "description": "Name of the prescribing doctor",
+          "example": "Dr. Sarah Levy"
+        },
+        "prescription_date": {
+          "type": "string",
+          "description": "Prescription date (ISO format)",
+          "format": "date-time",
+          "example": "2024-01-10T09:00:00Z"
+        },
+        "expiry_date": {
+          "type": "string",
+          "description": "Prescription expiry date (ISO format)",
+          "format": "date-time",
+          "example": "2024-04-10T09:00:00Z"
+        },
+        "quantity": {
+          "type": "integer",
+          "description": "Prescribed quantity",
+          "example": 30
+        },
+        "refills_remaining": {
+          "type": "integer",
+          "description": "Number of remaining refills",
+          "example": 2
+        },
+        "status": {
+          "type": "string",
+          "description": "Prescription status",
+          "enum": ["active", "expired", "fulfilled", "cancelled"],
+          "example": "active"
+        }
+      }
+    }
+  },
+  "example": {
+    "users": [
+      {
+        "user_id": "user_001",
+        "name": "John Doe",
+        "email": "john.doe@example.com",
+        "prescriptions": ["prescription_001"]
+      }
+    ],
+    "medications": [
+      {
+        "medication_id": "med_001",
+        "name_he": "Acamol",
+        "name_en": "Acetaminophen",
+        "active_ingredients": ["Paracetamol 500mg"],
+        "dosage_forms": ["Tablets", "Capsules"],
+        "dosage_instructions": "500-1000mg every 4-6 hours, maximum 4g per day",
+        "usage_instructions": "Take with or after food. Can be taken up to 4 times per day as needed",
+        "requires_prescription": false,
+        "description": "Pain reliever and fever reducer",
+        "stock": {
+          "available": true,
+          "quantity_in_stock": 150,
+          "last_restocked": "2024-01-15T10:30:00Z"
+        }
+      }
+    ],
+    "prescriptions": [
+      {
+        "prescription_id": "prescription_001",
+        "user_id": "user_001",
+        "medication_id": "med_001",
+        "prescribed_by": "Dr. Sarah Levy",
+        "prescription_date": "2024-01-10T09:00:00Z",
+        "expiry_date": "2024-04-10T09:00:00Z",
+        "quantity": 30,
+        "refills_remaining": 2,
+        "status": "active"
+      }
+    ]
+  }
+}
+
