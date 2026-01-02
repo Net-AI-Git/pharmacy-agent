@@ -27,7 +27,7 @@ Search for a medication by name with fuzzy matching support. Supports both Hebre
   "type": "function",
   "function": {
     "name": "get_medication_by_name",
-    "description": "Search for a medication by name with fuzzy matching support. This tool enables the AI agent to find medications when users provide medication names in natural language. It supports both Hebrew and English names, handles partial matches (fuzzy matching), and provides helpful suggestions when no exact match is found. Returns complete medication information including active ingredients, dosage instructions, stock availability, and prescription requirements.",
+    "description": "Search for a medication by name with fuzzy matching support. This tool enables the AI agent to find medications when users provide medication names in natural language. It supports both Hebrew and English names, handles partial matches (fuzzy matching), and provides helpful suggestions when no exact match is found. Returns basic medication information including active ingredients, dosage instructions, and description. Does NOT return stock availability or prescription requirements - use check_stock_availability and check_prescription_requirement for those.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -68,12 +68,11 @@ Search for a medication by name with fuzzy matching support. Supports both Hebre
   "dosage_forms": ["string"],
   "dosage_instructions": "string",
   "usage_instructions": "string",
-  "requires_prescription": boolean,
-  "description": "string",
-  "available": boolean,
-  "quantity_in_stock": integer
+  "description": "string"
 }
 ```
+
+**Note:** This tool does NOT return `requires_prescription`, `available`, or `quantity_in_stock`. For prescription information, use `check_prescription_requirement(medication_id)`. For stock information, use `check_stock_availability(medication_id)`.
 
 **Example:**
 ```json
@@ -85,10 +84,7 @@ Search for a medication by name with fuzzy matching support. Supports both Hebre
   "dosage_forms": ["Tablets", "Capsules"],
   "dosage_instructions": "500-1000mg every 4-6 hours, maximum 4g per day",
   "usage_instructions": "Take with or after food. Can be taken up to 4 times per day as needed",
-  "requires_prescription": false,
-  "description": "Pain reliever and fever reducer",
-  "available": true,
-  "quantity_in_stock": 150
+  "description": "Pain reliever and fever reducer"
 }
 ```
 
@@ -461,8 +457,13 @@ for chunk in agent.stream_response(user_message):
 The `StreamingAgent` automatically:
 - Registers all available tools with OpenAI
 - Handles tool calls during streaming
+- **Executes independent tools in parallel** using ThreadPoolExecutor for improved performance
+- Preserves tool call order in results (maintains OpenAI API expected order)
+- Isolates errors (one tool's failure doesn't prevent others from completing)
 - Executes tools and feeds results back to the model
 - Continues streaming with tool results
+
+**Performance Note:** When multiple independent tools are requested simultaneously, they execute in parallel, reducing total execution time. For example, if 3 tools each take 300ms sequentially (900ms total), parallel execution reduces this to approximately 600ms (~33% improvement).
 
 ### Registering Tools Manually
 

@@ -5,7 +5,7 @@
 **Tool Name:** `get_medication_by_name`
 
 **Purpose:**
-Searches for a medication in the database by name with fuzzy matching support. This tool enables the AI agent to find medications when users provide medication names in natural language. It supports both Hebrew and English names, handles partial matches (fuzzy matching), and provides helpful suggestions when no exact match is found. Returns complete medication information including active ingredients, dosage instructions, stock availability, and prescription requirements.
+Searches for a medication in the database by name with fuzzy matching support. This tool enables the AI agent to find medications when users provide medication names in natural language. It supports both Hebrew and English names, handles partial matches (fuzzy matching), and provides helpful suggestions when no exact match is found. Returns basic medication information including active ingredients, dosage instructions, and description. Does NOT return stock availability or prescription requirements - use check_stock_availability and check_prescription_requirement for those.
 
 ## Input Schema
 
@@ -91,24 +91,12 @@ When medication is found, returns `MedicationSearchResult`:
       "type": "string",
       "description": "Instructions on how to use the medication, including when to take it"
     },
-    "requires_prescription": {
-      "type": "boolean",
-      "description": "Whether a prescription is required to purchase this medication"
-    },
     "description": {
       "type": "string",
       "description": "General description of what the medication is used for"
-    },
-    "available": {
-      "type": "boolean",
-      "description": "Whether the medication is currently available in stock"
-    },
-    "quantity_in_stock": {
-      "type": "integer",
-      "description": "Current quantity of the medication in stock"
     }
   },
-  "required": ["medication_id", "name_he", "name_en", "active_ingredients", "dosage_instructions", "usage_instructions", "requires_prescription", "description", "available", "quantity_in_stock"]
+  "required": ["medication_id", "name_he", "name_en", "active_ingredients", "dosage_forms", "dosage_instructions", "usage_instructions", "description"]
 }
 ```
 
@@ -186,10 +174,7 @@ When medication is not found or an error occurs, returns `MedicationSearchError`
   "dosage_forms": ["Tablets", "Capsules"],
   "dosage_instructions": "500-1000mg every 4-6 hours, maximum 4g per day",
   "usage_instructions": "Take with or after food. Can be taken up to 4 times per day as needed",
-  "requires_prescription": false,
-  "description": "Pain reliever and fever reducer",
-  "available": true,
-  "quantity_in_stock": 150
+  "description": "Pain reliever and fever reducer"
 }
 ```
 

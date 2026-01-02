@@ -22,6 +22,7 @@ All limits are configurable via environment variables for flexibility.
 import os
 import time
 import logging
+import threading
 from typing import Dict, Tuple, Optional
 from collections import defaultdict
 from dotenv import load_dotenv
@@ -52,13 +53,14 @@ class RateLimiter:
     - Consecutive calls: Counter for consecutive calls to the same tool
     
     Uses sliding window approach - removes old timestamps outside the window
-    before checking limits. Thread-safe for single-threaded use (Python GIL).
-    For multi-threaded environments, additional locking would be needed.
+    before checking limits. Thread-safe for concurrent execution using
+    threading.Lock to protect shared state during parallel tool execution.
     
     Attributes:
         per_minute_limit: Maximum calls per tool per minute (default: 60)
         per_day_limit: Maximum calls per tool per day (default: 1000)
         consecutive_limit: Maximum consecutive calls to same tool (default: 10)
+        _lock: Threading lock for thread-safe state access
         _minute_calls: Dict tracking calls per minute per tool per agent
         _day_calls: Dict tracking calls per day per tool per agent
         _consecutive_calls: Dict tracking consecutive calls per tool per agent
@@ -92,6 +94,12 @@ class RateLimiter:
                 If None, reads from RATE_LIMIT_PER_DAY env var or defaults to 1000.
             consecutive_limit: Maximum consecutive calls to same tool.
                 If None, reads from RATE_LIMIT_CONSECUTIVE env var or defaults to 10.
+        
+        Returns:
+            None. Initializes the RateLimiter instance with configured limits.
+        
+        Raises:
+            ValueError: If environment variable values cannot be converted to integers.
         """
         # Load limits from environment or use defaults
         self.per_minute_limit = (
@@ -120,6 +128,9 @@ class RateLimiter:
         # Track last tool called per agent
         self._last_tool: Dict[str, str] = {}
         
+        # Thread lock for thread-safe concurrent access
+        self._lock = threading.Lock()
+        
         logger.info(
             f"RateLimiter initialized: "
             f"per_minute={self.per_minute_limit}, "
@@ -144,6 +155,12 @@ class RateLimiter:
             key: Tuple of (tool_name, agent_id) for the tracking entry
             window_seconds: Time window in seconds (60 for minute, 86400 for day)
             calls_list: List of timestamps to clean
+        
+        Returns:
+            None. Modifies self._minute_calls in place by filtering old entries.
+        
+        Raises:
+            None. This method does not raise exceptions.
         """
         current_time = time.time()
         cutoff_time = current_time - window_seconds
@@ -159,7 +176,8 @@ class RateLimiter:
         Validates whether a tool call should be allowed based on configured
         rate limits. Prevents resource exhaustion and infinite loops by
         enforcing limits on call frequency. Returns clear error messages
-        when limits are exceeded to help with debugging.
+        when limits are exceeded to help with debugging. Thread-safe for
+        concurrent execution when multiple tools are executed in parallel.
         
         Implementation (What):
         Checks three types of limits:
@@ -168,8 +186,9 @@ class RateLimiter:
         3. Consecutive limit: Tracks consecutive calls to the same tool
         
         Uses sliding window approach - cleans old entries before checking.
-        Returns tuple of (allowed, error_message) where error_message is None
-        if allowed, or a descriptive message if limit exceeded.
+        All state access is protected by threading.Lock to ensure thread-safety
+        during parallel tool execution. Returns tuple of (allowed, error_message)
+        where error_message is None if allowed, or a descriptive message if limit exceeded.
         
         Args:
             tool_name: Name of the tool to check
@@ -188,74 +207,75 @@ class RateLimiter:
             >>> if not allowed:
             ...     print(f"Rate limit exceeded: {error}")
         """
-        current_time = time.time()
-        key = (tool_name, agent_id)
-        
-        # Clean up old entries before checking
-        if key in self._minute_calls:
-            self._cleanup_old_entries(key, 60, self._minute_calls[key])
-        
-        if key in self._day_calls:
-            self._cleanup_old_entries(key, 86400, self._day_calls[key])
-        
-        # Check per-minute limit
-        minute_calls = self._minute_calls[key]
-        if len(minute_calls) >= self.per_minute_limit:
-            error_msg = (
-                f"Rate limit exceeded: {len(minute_calls)} calls to '{tool_name}' "
-                f"in the last minute (limit: {self.per_minute_limit}). "
-                f"Please wait before trying again."
-            )
-            logger.warning(f"Rate limit exceeded for {tool_name} by {agent_id}: per-minute limit")
-            return False, error_msg
-        
-        # Check per-day limit
-        day_calls = self._day_calls[key]
-        if len(day_calls) >= self.per_day_limit:
-            error_msg = (
-                f"Rate limit exceeded: {len(day_calls)} calls to '{tool_name}' "
-                f"in the last 24 hours (limit: {self.per_day_limit}). "
-                f"Daily limit reached. Please try again tomorrow."
-            )
-            logger.warning(f"Rate limit exceeded for {tool_name} by {agent_id}: per-day limit")
-            return False, error_msg
-        
-        # Check consecutive limit
-        last_tool = self._last_tool.get(agent_id)
-        if last_tool == tool_name:
-            # Same tool as last call - increment consecutive counter
-            current_tool, count = self._consecutive_calls.get(agent_id, (tool_name, 0))
-            if current_tool == tool_name:
-                count += 1
-                if count >= self.consecutive_limit:
-                    error_msg = (
-                        f"Rate limit exceeded: {count} consecutive calls to '{tool_name}' "
-                        f"(limit: {self.consecutive_limit}). "
-                        f"This may indicate an infinite loop. Please check your request."
-                    )
-                    logger.warning(
-                        f"Rate limit exceeded for {tool_name} by {agent_id}: "
-                        f"consecutive limit ({count} calls)"
-                    )
-                    return False, error_msg
-                self._consecutive_calls[agent_id] = (tool_name, count)
+        with self._lock:
+            current_time = time.time()
+            key = (tool_name, agent_id)
+            
+            # Clean up old entries before checking
+            if key in self._minute_calls:
+                self._cleanup_old_entries(key, 60, self._minute_calls[key])
+            
+            if key in self._day_calls:
+                self._cleanup_old_entries(key, 86400, self._day_calls[key])
+            
+            # Check per-minute limit
+            minute_calls = self._minute_calls[key]
+            if len(minute_calls) >= self.per_minute_limit:
+                error_msg = (
+                    f"Rate limit exceeded: {len(minute_calls)} calls to '{tool_name}' "
+                    f"in the last minute (limit: {self.per_minute_limit}). "
+                    f"Please wait before trying again."
+                )
+                logger.warning(f"Rate limit exceeded for {tool_name} by {agent_id}: per-minute limit")
+                return False, error_msg
+            
+            # Check per-day limit
+            day_calls = self._day_calls[key]
+            if len(day_calls) >= self.per_day_limit:
+                error_msg = (
+                    f"Rate limit exceeded: {len(day_calls)} calls to '{tool_name}' "
+                    f"in the last 24 hours (limit: {self.per_day_limit}). "
+                    f"Daily limit reached. Please try again tomorrow."
+                )
+                logger.warning(f"Rate limit exceeded for {tool_name} by {agent_id}: per-day limit")
+                return False, error_msg
+            
+            # Check consecutive limit
+            last_tool = self._last_tool.get(agent_id)
+            if last_tool == tool_name:
+                # Same tool as last call - increment consecutive counter
+                current_tool, count = self._consecutive_calls.get(agent_id, (tool_name, 0))
+                if current_tool == tool_name:
+                    count += 1
+                    if count >= self.consecutive_limit:
+                        error_msg = (
+                            f"Rate limit exceeded: {count} consecutive calls to '{tool_name}' "
+                            f"(limit: {self.consecutive_limit}). "
+                            f"This may indicate an infinite loop. Please check your request."
+                        )
+                        logger.warning(
+                            f"Rate limit exceeded for {tool_name} by {agent_id}: "
+                            f"consecutive limit ({count} calls)"
+                        )
+                        return False, error_msg
+                    self._consecutive_calls[agent_id] = (tool_name, count)
+                else:
+                    # Different tool - reset counter
+                    self._consecutive_calls[agent_id] = (tool_name, 1)
             else:
-                # Different tool - reset counter
-                self._consecutive_calls[agent_id] = (tool_name, 1)
-        else:
-            # Different tool or first call - reset consecutive counter
-            if last_tool is not None:
-                # Reset counter for new tool
-                self._consecutive_calls[agent_id] = (tool_name, 1)
-            else:
-                # First call for this agent
-                self._consecutive_calls[agent_id] = (tool_name, 1)
-        
-        # Update last tool
-        self._last_tool[agent_id] = tool_name
-        
-        # All checks passed
-        return True, None
+                # Different tool or first call - reset consecutive counter
+                if last_tool is not None:
+                    # Reset counter for new tool
+                    self._consecutive_calls[agent_id] = (tool_name, 1)
+                else:
+                    # First call for this agent
+                    self._consecutive_calls[agent_id] = (tool_name, 1)
+            
+            # Update last tool
+            self._last_tool[agent_id] = tool_name
+            
+            # All checks passed
+            return True, None
     
     def record_call(self, tool_name: str, agent_id: str = "default") -> None:
         """
@@ -264,17 +284,25 @@ class RateLimiter:
         Purpose (Why):
         Records that a tool call occurred, updating tracking structures for
         rate limit enforcement. Should be called after a successful rate limit
-        check and before tool execution to maintain accurate tracking.
+        check and before tool execution to maintain accurate tracking. Thread-safe
+        for concurrent execution when multiple tools are executed in parallel.
         
         Implementation (What):
         Adds current timestamp to both minute and day tracking lists for the
         given tool and agent. This updates the sliding window tracking used
-        by check_rate_limit().
+        by check_rate_limit(). All state updates are protected by threading.Lock
+        to ensure thread-safety during parallel tool execution.
         
         Args:
             tool_name: Name of the tool that was called
             agent_id: Identifier for the agent/session making the call.
                 Defaults to "default" for stateless agents.
+        
+        Returns:
+            None. Updates internal tracking structures with the tool call timestamp.
+        
+        Raises:
+            None. This method does not raise exceptions.
         
         Example:
             >>> limiter = RateLimiter()
@@ -283,12 +311,13 @@ class RateLimiter:
             ...     limiter.record_call("get_medication_by_name", "session_123")
             ...     # Execute tool...
         """
-        current_time = time.time()
-        key = (tool_name, agent_id)
-        
-        # Add timestamp to tracking lists
-        self._minute_calls[key].append(current_time)
-        self._day_calls[key].append(current_time)
-        
-        logger.debug(f"Recorded tool call: {tool_name} by {agent_id} at {current_time}")
+        with self._lock:
+            current_time = time.time()
+            key = (tool_name, agent_id)
+            
+            # Add timestamp to tracking lists
+            self._minute_calls[key].append(current_time)
+            self._day_calls[key].append(current_time)
+            
+            logger.debug(f"Recorded tool call: {tool_name} by {agent_id} at {current_time}")
 

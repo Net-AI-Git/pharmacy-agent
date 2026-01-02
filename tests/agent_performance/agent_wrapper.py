@@ -189,8 +189,19 @@ class TracedStreamingAgent:
                 if "temperature" in api_params:
                     iteration_data["api_call"]["parameters"]["temperature"] = api_params["temperature"]
                 
+                # #region agent log
+                api_call_start_time = time.time()
+                # #endregion
+                
                 # Call OpenAI API with streaming enabled
                 stream = self.agent.client.chat.completions.create(**api_params)
+                
+                # #region agent log
+                api_call_return_time = time.time()
+                api_call_overhead = api_call_return_time - api_call_start_time
+                with open(r'c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"agent_wrapper.py:193","message":"API call overhead","data":{"iteration":iteration,"api_call_overhead":api_call_overhead,"messages_count":len(messages)},"timestamp":int(time.time()*1000)}) + '\n')
+                # #endregion
                 
                 # Collect response chunks and tool calls
                 accumulated_content = ""
@@ -198,7 +209,29 @@ class TracedStreamingAgent:
                 finish_reason = None
                 chunks_in_iteration = []
                 
+                # #region agent log
+                chunk_start_time = time.time()
+                first_chunk_time = None
+                last_chunk_time = None
+                chunk_count = 0
+                total_chunk_delay = 0.0
+                # #endregion
+                
                 for chunk in stream:
+                    # #region agent log
+                    chunk_receive_time = time.time()
+                    if first_chunk_time is None:
+                        first_chunk_time = chunk_receive_time
+                        time_to_first_chunk = first_chunk_time - chunk_start_time
+                        with open(r'c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"agent_wrapper.py:201","message":"Time to first chunk","data":{"iteration":iteration,"time_to_first_chunk":time_to_first_chunk,"user_message":user_message[:100]},"timestamp":int(time.time()*1000)}) + '\n')
+                    if last_chunk_time is not None:
+                        delay_between_chunks = chunk_receive_time - last_chunk_time
+                        total_chunk_delay += delay_between_chunks
+                    last_chunk_time = chunk_receive_time
+                    chunk_count += 1
+                    # #endregion
+                    
                     delta = chunk.choices[0].delta
                     chunk_data = {
                         "content": None,
@@ -265,6 +298,14 @@ class TracedStreamingAgent:
                 iteration_data["api_call"]["final_finish_reason"] = finish_reason
                 all_chunks.extend(chunks_in_iteration)
                 
+                # #region agent log
+                stream_end_time = time.time()
+                stream_duration = stream_end_time - chunk_start_time
+                avg_chunk_delay = total_chunk_delay / max(chunk_count - 1, 1) if chunk_count > 1 else 0
+                with open(r'c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"agent_wrapper.py:262","message":"Stream timing analysis","data":{"iteration":iteration,"chunk_count":chunk_count,"stream_duration":stream_duration,"total_chunk_delay":total_chunk_delay,"avg_chunk_delay":avg_chunk_delay,"accumulated_content_length":len(accumulated_content)},"timestamp":int(time.time()*1000)}) + '\n')
+                # #endregion
+                
                 # After stream completes, check if we need to handle tool calls
                 if finish_reason == "tool_calls" and tool_calls_collected:
                     # Add accumulated content to assistant message if any
@@ -285,6 +326,21 @@ class TracedStreamingAgent:
                     
                     logger.info(f"Model requested {len(tool_calls_collected)} tool calls during streaming")
                     
+                    # #region agent log
+                    # Check if previous tool results already contain the information
+                    previous_tool_results = []
+                    for msg in messages:
+                        if msg.get("role") == "tool":
+                            previous_tool_results.append(msg.get("content", ""))
+                    # Also check all previous iterations for tool results
+                    all_previous_tool_names = []
+                    for prev_iteration in self.trace.get("iterations", []):
+                        for prev_tool in prev_iteration.get("tool_executions", []):
+                            all_previous_tool_names.append(prev_tool.get("tool_name", ""))
+                    with open(r'c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"agent_wrapper.py:286","message":"Tool call decision analysis","data":{"iteration":iteration,"requested_tools":[tc.get("function",{}).get("name","") for tc in tool_calls_collected],"previous_tool_results_count":len(previous_tool_results),"all_previous_tool_names":all_previous_tool_names,"accumulated_content":accumulated_content[:200]},"timestamp":int(time.time()*1000)}) + '\n')
+                    # #endregion
+                    
                     # Execute tools and capture execution data
                     tool_messages = []
                     for tool_call in tool_calls_collected:
@@ -300,6 +356,37 @@ class TracedStreamingAgent:
                         try:
                             # Parse arguments
                             arguments = json.loads(arguments_str)
+                            
+                            # #region agent log
+                            # Check if information already exists from previous tool calls (check all previous iterations)
+                            info_already_available = False
+                            if tool_name == "check_prescription_requirement":
+                                # Check if get_medication_by_name was already called in any previous iteration
+                                for prev_iteration in self.trace.get("iterations", []):
+                                    for prev_tool in prev_iteration.get("tool_executions", []):
+                                        if prev_tool.get("tool_name") == "get_medication_by_name":
+                                            result = prev_tool.get("result", {})
+                                            if isinstance(result, dict) and "requires_prescription" in result:
+                                                info_already_available = True
+                                                with open(r'c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                                                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"agent_wrapper.py:343","message":"Redundant tool call detected","data":{"tool_name":tool_name,"medication_id":arguments.get("medication_id",""),"requires_prescription_already_available":result.get("requires_prescription"),"found_in_iteration":prev_iteration.get("iteration"),"user_message":user_message[:100]},"timestamp":int(time.time()*1000)}) + '\n')
+                                                break
+                                    if info_already_available:
+                                        break
+                            elif tool_name == "check_stock_availability":
+                                # Check if get_medication_by_name was already called in any previous iteration
+                                for prev_iteration in self.trace.get("iterations", []):
+                                    for prev_tool in prev_iteration.get("tool_executions", []):
+                                        if prev_tool.get("tool_name") == "get_medication_by_name":
+                                            result = prev_tool.get("result", {})
+                                            if isinstance(result, dict) and "available" in result and "quantity_in_stock" in result:
+                                                info_already_available = True
+                                                with open(r'c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                                                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"agent_wrapper.py:353","message":"Redundant tool call detected","data":{"tool_name":tool_name,"medication_id":arguments.get("medication_id",""),"stock_info_already_available":True,"found_in_iteration":prev_iteration.get("iteration"),"user_message":user_message[:100]},"timestamp":int(time.time()*1000)}) + '\n')
+                                                break
+                                    if info_already_available:
+                                        break
+                            # #endregion
                             
                             # Build context for audit logging
                             context = {
@@ -318,6 +405,11 @@ class TracedStreamingAgent:
                             )
                             
                             tool_exec_time = time.time() - tool_exec_start
+                            
+                            # #region agent log
+                            with open(r'c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"agent_wrapper.py:320","message":"Tool execution completed","data":{"tool_name":tool_name,"execution_time":tool_exec_time,"iteration":iteration,"info_already_available":info_already_available},"timestamp":int(time.time()*1000)}) + '\n')
+                            # #endregion
                             
                             # Store tool execution data
                             iteration_data["tool_executions"].append({
@@ -367,6 +459,12 @@ class TracedStreamingAgent:
                     
                     messages.extend(tool_messages)
                     iteration_data["iteration_time"] = time.time() - iteration_start_time
+                    
+                    # #region agent log
+                    with open(r'c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"agent_wrapper.py:369","message":"Iteration completed with tool calls","data":{"iteration":iteration,"iteration_time":iteration_data["iteration_time"],"stream_duration":stream_duration,"tool_count":len(tool_calls_collected)},"timestamp":int(time.time()*1000)}) + '\n')
+                    # #endregion
+                    
                     self.trace["iterations"].append(iteration_data)
                     # Continue loop to get model's response to tool results
                     continue
@@ -375,6 +473,12 @@ class TracedStreamingAgent:
                 if finish_reason == "stop":
                     if accumulated_content:
                         iteration_data["iteration_time"] = time.time() - iteration_start_time
+                        
+                        # #region agent log
+                        with open(r'c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"agent_wrapper.py:375","message":"Final response iteration completed","data":{"iteration":iteration,"iteration_time":iteration_data["iteration_time"],"stream_duration":stream_duration,"response_length":len(accumulated_content),"chunk_count":chunk_count},"timestamp":int(time.time()*1000)}) + '\n')
+                        # #endregion
+                        
                         self.trace["iterations"].append(iteration_data)
                         self.trace["end_time"] = time.time()
                         logger.info("Streaming completed with final response")

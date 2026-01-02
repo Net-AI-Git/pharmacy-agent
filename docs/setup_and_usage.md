@@ -194,7 +194,7 @@ Agent: [Searches] → [Retrieves details] → [Checks prescription] →
 
 ### Using StreamingAgent
 
-The application uses `StreamingAgent` for real-time text streaming responses. Here's how to use it:
+The application uses `StreamingAgent` for real-time text streaming responses. The agent automatically executes independent tools in parallel for improved performance. Here's how to use it:
 
 ```python
 from app.agent import StreamingAgent
@@ -203,10 +203,13 @@ from app.agent import StreamingAgent
 agent = StreamingAgent(model="gpt-5")
 
 # Stream response in real-time
-user_message = "Tell me about Acamol"
+# If multiple tools are needed, they execute in parallel automatically
+user_message = "Tell me about Acamol and check if it's in stock"
 for chunk in agent.stream_response(user_message):
     print(chunk, end="", flush=True)
 ```
+
+**Note:** When the agent requests multiple independent tools (e.g., checking stock and prescription requirements), they execute concurrently using ThreadPoolExecutor, reducing total execution time significantly.
 
 ### StreamingAgent with Conversation History
 

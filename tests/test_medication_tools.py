@@ -217,7 +217,7 @@ class TestMedicationTools:
         
         Arrange: Valid medication name
         Act: Call get_medication_by_name
-        Assert: Result contains all expected fields
+        Assert: Result contains all expected fields (basic medication info only, no stock/prescription)
         """
         # Arrange
         name = "Acamol"
@@ -230,11 +230,18 @@ class TestMedicationTools:
         assert "error" not in result, f"Expected success but got error: {result.get('error', 'Unknown error')}"
         required_fields = [
             "medication_id", "name_he", "name_en", "active_ingredients",
-            "dosage_forms", "dosage_instructions", "usage_instructions",
-            "requires_prescription", "description", "available", "quantity_in_stock"
+            "dosage_forms", "dosage_instructions", "usage_instructions", "description"
         ]
         for field in required_fields:
             assert field in result, f"Result must include field '{field}', but it's missing"
+        
+        # Verify that stock and prescription fields are NOT included
+        assert "requires_prescription" not in result, \
+            "Result should NOT include requires_prescription (use check_prescription_requirement instead)"
+        assert "available" not in result, \
+            "Result should NOT include available (use check_stock_availability instead)"
+        assert "quantity_in_stock" not in result, \
+            "Result should NOT include quantity_in_stock (use check_stock_availability instead)"
     
     def test_get_medication_by_name_active_ingredients_not_empty(self):
         """

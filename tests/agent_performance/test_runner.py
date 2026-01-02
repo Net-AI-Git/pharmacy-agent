@@ -24,6 +24,7 @@ if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 from tests.agent_performance.agent_wrapper import TracedStreamingAgent
+from tests.agent_performance.evaluation.evaluator import evaluate_test_result
 
 # Configure module-level logger
 logger = logging.getLogger(__name__)
@@ -192,6 +193,16 @@ def run_single_test(test_config: Dict[str, Any]) -> Dict[str, Any]:
             }
         }
     }
+    
+    # Run evaluation
+    try:
+        logger.debug("Running evaluation")
+        evaluation = evaluate_test_result(result)
+        result["evaluation"] = evaluation
+        logger.debug(f"Evaluation complete. Efficiency score: {evaluation.get('efficiency_score', 0)}")
+    except Exception as e:
+        logger.warning(f"Error during evaluation: {e}", exc_info=True)
+        # Continue without evaluation rather than failing the test
     
     logger.info(f"Test completed: {test_name} - {total_api_calls} API calls, {total_tool_calls} tool calls, {total_time:.3f}s")
     return result

@@ -89,39 +89,36 @@ class MedicationSearchResult(BaseModel):
     Output schema for successful medication search.
     
     Purpose (Why):
-    Defines the structure of medication information returned to the agent. Ensures
+    Defines the structure of basic medication information returned to the agent. Ensures
     all required fields (active_ingredients, dosage_instructions) are present
-    and provides a consistent format for the agent to process.
+    and provides a consistent format for the agent to process. This tool returns only
+    basic medication information - for stock availability, use check_stock_availability,
+    and for prescription requirements, use check_prescription_requirement.
     
     Implementation (What):
     Inherits from Pydantic BaseModel for validation and serialization. Includes
-    all medication fields with Field descriptions. The medication_id is included
-    for reference in subsequent tool calls.
+    basic medication fields with Field descriptions. The medication_id is included
+    for reference in subsequent tool calls. Does NOT include stock or prescription
+    information to maintain separation of concerns.
     
     Attributes:
-        medication_id: Unique identifier for the medication
+        medication_id: Unique identifier for the medication (use this for other tool calls)
         name_he: Name in Hebrew
         name_en: Name in English
         active_ingredients: List of active ingredients (required field)
         dosage_forms: Available dosage forms
         dosage_instructions: Detailed dosage instructions (required field)
         usage_instructions: Instructions on how to use the medication
-        requires_prescription: Whether prescription is required
-        description: General description of the medication
-        available: Whether the medication is currently in stock
-        quantity_in_stock: Current stock quantity
+        description: General description of what the medication is used for
     """
-    medication_id: str = Field(description="Unique identifier for the medication")
+    medication_id: str = Field(description="Unique identifier for the medication (use this for check_stock_availability and check_prescription_requirement)")
     name_he: str = Field(description="Name of the medication in Hebrew")
     name_en: str = Field(description="Name of the medication in English")
     active_ingredients: List[str] = Field(description="List of active ingredients in the medication (required field)")
     dosage_forms: List[str] = Field(description="Available dosage forms (e.g., Tablets, Capsules, Syrup)")
     dosage_instructions: str = Field(description="Detailed dosage instructions including amount and frequency (required field)")
     usage_instructions: str = Field(description="Instructions on how to use the medication, including when to take it")
-    requires_prescription: bool = Field(description="Whether a prescription is required to purchase this medication")
     description: str = Field(description="General description of what the medication is used for")
-    available: bool = Field(description="Whether the medication is currently available in stock")
-    quantity_in_stock: int = Field(description="Current quantity of the medication in stock")
 
 
 class MedicationSearchError(BaseModel):
@@ -272,17 +269,20 @@ def _build_success_result(medication: Medication) -> MedicationSearchResult:
     
     Purpose (Why):
     Converts Medication model to MedicationSearchResult schema for consistent
-    tool output format. Extracts all necessary fields including stock information.
+    tool output format. Extracts only basic medication information (no stock or
+    prescription data) to maintain separation of concerns.
     
     Implementation (What):
-    Maps Medication model fields to MedicationSearchResult schema, including
-    nested stock information. Returns validated Pydantic model instance.
+    Maps Medication model fields to MedicationSearchResult schema, excluding
+    stock and prescription information. Returns validated Pydantic model instance.
+    For stock information, use check_stock_availability. For prescription information,
+    use check_prescription_requirement.
     
     Args:
         medication: The Medication model instance to convert
     
     Returns:
-        MedicationSearchResult with all medication information
+        MedicationSearchResult with basic medication information only
     """
     return MedicationSearchResult(
         medication_id=medication.medication_id,
@@ -292,10 +292,7 @@ def _build_success_result(medication: Medication) -> MedicationSearchResult:
         dosage_forms=medication.dosage_forms,
         dosage_instructions=medication.dosage_instructions,
         usage_instructions=medication.usage_instructions,
-        requires_prescription=medication.requires_prescription,
-        description=medication.description,
-        available=medication.stock.available,
-        quantity_in_stock=medication.stock.quantity_in_stock
+        description=medication.description
     )
 
 
@@ -460,10 +457,12 @@ def get_medication_by_name(name: str, language: Optional[str] = None) -> Dict[st
     
     Implementation (What):
     Uses DatabaseManager to search the medication database by name. Supports case-
-    insensitive partial matching in both Hebrew and English. Returns complete medication
+    insensitive partial matching in both Hebrew and English. Returns basic medication
     information including required fields (active_ingredients, dosage_instructions).
-    If no exact match is found, returns error with suggestions based on similar names.
-    Uses module-level caching for DatabaseManager to improve performance.
+    Does NOT return stock or prescription information - use check_stock_availability
+    and check_prescription_requirement for those. If no exact match is found, returns
+    error with suggestions based on similar names. Uses module-level caching for
+    DatabaseManager to improve performance.
     
     Args:
         name: The medication name to search for (string, case-insensitive, supports partial matches)
@@ -472,7 +471,7 @@ def get_medication_by_name(name: str, language: Optional[str] = None) -> Dict[st
     
     Returns:
         Dictionary containing either:
-        - MedicationSearchResult: If medication is found (includes all medication details)
+        - MedicationSearchResult: If medication is found (includes basic medication details only)
         - MedicationSearchError: If medication is not found (includes error message and suggestions)
     
     Raises:
@@ -491,11 +490,11 @@ def get_medication_by_name(name: str, language: Optional[str] = None) -> Dict[st
             "dosage_forms": ["Tablets", "Capsules"],
             "dosage_instructions": "500-1000mg every 4-6 hours, maximum 4g per day",
             "usage_instructions": "Take with or after food. Can be taken up to 4 times per day as needed",
-            "requires_prescription": False,
-            "description": "Pain reliever and fever reducer",
-            "available": True,
-            "quantity_in_stock": 150
+            "description": "Pain reliever and fever reducer"
         }
+        
+    Note: For stock availability, use check_stock_availability(medication_id).
+          For prescription requirements, use check_prescription_requirement(medication_id).
     
     Example Output (Error):
         {

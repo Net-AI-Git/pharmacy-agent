@@ -312,5 +312,118 @@ def format_markdown(result_data: Dict[str, Any]) -> str:
     else:
         lines.append("- Tools Used: (none)")
     
+    lines.append("")
+    
+    # Evaluation Section
+    evaluation = result_data.get("evaluation", {})
+    if evaluation:
+        lines.append("## Evaluation")
+        lines.append("")
+        
+        # Token Usage
+        token_usage = evaluation.get("token_usage", {})
+        if token_usage:
+            lines.append("### Token Usage")
+            lines.append(f"- Total Input Tokens: {token_usage.get('total_input_tokens', 0):,}")
+            lines.append(f"- Total Output Tokens: {token_usage.get('total_output_tokens', 0):,}")
+            lines.append(f"- Total Tokens: {token_usage.get('total_tokens', 0):,}")
+            lines.append(f"- Average Input Tokens per Call: {token_usage.get('average_input_tokens_per_call', 0):.1f}")
+            lines.append(f"- Average Output Tokens per Call: {token_usage.get('average_output_tokens_per_call', 0):.1f}")
+            lines.append(f"- System Prompt Tokens: {token_usage.get('system_prompt_tokens', 0):,}")
+            lines.append("")
+        
+        # Cost Estimation
+        cost_estimation = evaluation.get("cost_estimation", {})
+        if cost_estimation:
+            lines.append("### Cost Estimation")
+            lines.append(f"- Total Estimated Cost: ${cost_estimation.get('total_cost_usd', 0):.6f}")
+            lines.append(f"- Input Cost: ${cost_estimation.get('input_cost_usd', 0):.6f}")
+            lines.append(f"- Output Cost: ${cost_estimation.get('output_cost_usd', 0):.6f}")
+            lines.append(f"- Model: {cost_estimation.get('model', 'N/A')}")
+            lines.append("")
+        
+        # Duplicate Calls
+        dup_api = evaluation.get("duplicate_api_calls", [])
+        dup_tools = evaluation.get("duplicate_tool_calls", [])
+        redundant_info = evaluation.get("redundant_information", [])
+        
+        if dup_api or dup_tools or redundant_info:
+            lines.append("### Duplicate & Redundant Calls")
+            
+            if dup_api:
+                lines.append(f"- **Duplicate API Calls:** {len(dup_api)}")
+                for dup in dup_api[:3]:
+                    iterations_str = ", ".join(map(str, dup.get("iterations", [])))
+                    lines.append(f"  - Pattern appears {dup.get('occurrences', 0)} times in iterations: {iterations_str}")
+            
+            if dup_tools:
+                lines.append(f"- **Duplicate Tool Calls:** {len(dup_tools)}")
+                for dup in dup_tools[:3]:
+                    tool_name = dup.get("tool_name", "unknown")
+                    iterations_str = ", ".join(map(str, dup.get("iterations", [])))
+                    redundant = " (redundant)" if dup.get("is_redundant") else ""
+                    lines.append(f"  - `{tool_name}` called {dup.get('occurrences', 0)} times{redundant} in iterations: {iterations_str}")
+            
+            if redundant_info:
+                lines.append(f"- **Redundant Information Cases:** {len(redundant_info)}")
+                for case in redundant_info[:3]:
+                    tool_name = case.get("tool_name", "unknown")
+                    iteration = case.get("iteration", 0)
+                    severity = case.get("severity", "unknown")
+                    lines.append(f"  - `{tool_name}` in iteration {iteration} ({severity} severity)")
+            
+            lines.append("")
+        
+        # Efficiency Analysis
+        efficiency_analysis = evaluation.get("efficiency_analysis", {})
+        if efficiency_analysis:
+            issues = efficiency_analysis.get("issues", [])
+            if issues:
+                lines.append("### Efficiency Issues")
+                for issue in issues[:5]:
+                    issue_type = issue.get("type", "unknown")
+                    severity = issue.get("severity", "unknown")
+                    description = issue.get("description", "")
+                    lines.append(f"- **{issue_type}** ({severity}): {description}")
+                if len(issues) > 5:
+                    lines.append(f"- ... and {len(issues) - 5} more issues")
+                lines.append("")
+        
+        # Efficiency Score
+        efficiency_score = evaluation.get("efficiency_score", 0)
+        lines.append(f"### Efficiency Score: **{efficiency_score}/100**")
+        
+        if efficiency_score >= 80:
+            lines.append("  - Status: Excellent")
+        elif efficiency_score >= 60:
+            lines.append("  - Status: Good")
+        elif efficiency_score >= 40:
+            lines.append("  - Status: Fair")
+        else:
+            lines.append("  - Status: Needs Improvement")
+        
+        lines.append("")
+        
+        # Recommendations
+        recommendations = evaluation.get("recommendations", [])
+        if recommendations:
+            lines.append("### Recommendations")
+            for rec in recommendations:
+                lines.append(f"- {rec}")
+            lines.append("")
+        
+        # Summary
+        summary = evaluation.get("summary", {})
+        if summary:
+            lines.append("### Summary")
+            lines.append(f"- Total Duplicate API Calls: {summary.get('total_duplicate_api_calls', 0)}")
+            lines.append(f"- Total Duplicate Tool Calls: {summary.get('total_duplicate_tool_calls', 0)}")
+            lines.append(f"- Total Redundant Information Cases: {summary.get('total_redundant_information_cases', 0)}")
+            lines.append(f"- Total Inefficiency Issues: {summary.get('total_inefficiency_issues', 0)}")
+            lines.append(f"- Estimated Cost: ${summary.get('estimated_cost_usd', 0):.6f}")
+            lines.append(f"- Total Tokens: {summary.get('total_tokens', 0):,}")
+            lines.append(f"- Efficiency Score: {summary.get('efficiency_score', 0)}/100")
+            lines.append("")
+    
     return "\n".join(lines)
 

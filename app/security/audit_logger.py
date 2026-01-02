@@ -21,6 +21,7 @@ comprehensive auditing without exposing sensitive data.
 import os
 import json
 import logging
+import threading
 from datetime import datetime
 from typing import Dict, Any, Optional
 from pathlib import Path
@@ -53,12 +54,13 @@ class AuditLogger:
     includes correlation ID, timestamp, agent ID, tool name (if applicable),
     arguments, results, context, and status. Logs are written to a dedicated
     audit log directory, with one file per day for easy retrieval. Thread-safe
-    for single-threaded use (Python GIL). For multi-threaded environments,
-    additional locking would be needed.
+    for concurrent execution using threading.Lock to protect file write operations
+    during parallel tool execution.
     
     Attributes:
         log_dir: Directory path for audit logs
         enabled: Whether audit logging is enabled (from environment or default: True)
+        _lock: Threading lock for thread-safe file write operations
     """
     
     def __init__(self, log_dir: Optional[str] = None, enabled: Optional[bool] = None):
@@ -82,6 +84,12 @@ class AuditLogger:
                 If None, reads from AUDIT_LOG_DIR env var or uses DEFAULT_AUDIT_LOG_DIR.
             enabled: Whether audit logging is enabled.
                 If None, reads from AUDIT_LOGGING_ENABLED env var or defaults to True.
+        
+        Returns:
+            None. Initializes the AuditLogger instance with configured settings.
+        
+        Raises:
+            OSError: If log directory cannot be created (permissions, disk space, etc.).
         """
         self.log_dir = log_dir or os.getenv("AUDIT_LOG_DIR", DEFAULT_AUDIT_LOG_DIR)
         self.enabled = (
@@ -89,6 +97,9 @@ class AuditLogger:
             if enabled is not None
             else os.getenv("AUDIT_LOGGING_ENABLED", "true").lower() == "true"
         )
+        
+        # Thread lock for thread-safe file write operations
+        self._lock = threading.Lock()
         
         # Create log directory if it doesn't exist
         if self.enabled:
@@ -115,9 +126,13 @@ class AuditLogger:
         Implementation (What):
         Creates a file path based on current timestamp in format:
         audit_YYYY-MM-DD_HH-MM-SS.json in the configured log directory.
+        The file is not created here, only the path is generated.
         
         Returns:
-            Full path to the new log file
+            str: Full path to the new log file (file is created on first write).
+        
+        Raises:
+            None. This method only generates a path string and does not perform I/O.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         return os.path.join(self.log_dir, f"audit_{timestamp}.json")
@@ -137,7 +152,15 @@ class AuditLogger:
         Only processes files matching the audit_*.json pattern.
         
         Args:
-            keep_count: Number of recent log files to keep (default: 5)
+            keep_count: Number of recent log files to keep (default: 5).
+                Must be a positive integer.
+        
+        Returns:
+            None. Modifies log directory by deleting old files.
+        
+        Raises:
+            None. All exceptions during file operations are caught and logged,
+            but do not propagate to prevent cleanup failures from breaking the application.
         """
         try:
             # Find all audit log files
@@ -177,6 +200,12 @@ class AuditLogger:
         Creates a new log file with a unique timestamp and cleans up old log
         files, keeping only the 5 most recent ones. This should be called at
         the start of each run to ensure proper log isolation.
+        
+        Returns:
+            None. Updates self.current_log_file with new log file path.
+        
+        Raises:
+            OSError: If log directory cannot be accessed or log file cannot be created.
         """
         if not self.enabled:
             return
@@ -194,24 +223,39 @@ class AuditLogger:
         Purpose (Why):
         Persists audit log entries to disk for long-term storage and analysis.
         Ensures all operations are recorded for compliance and debugging.
+        Thread-safe for concurrent execution when multiple tools write audit logs
+        simultaneously during parallel tool execution.
         
         Implementation (What):
         Appends log entry to the current run's log file as a JSON line. Uses JSON lines
         format (one JSON object per line) for easy parsing and streaming.
-        Creates file if it doesn't exist. Handles errors gracefully to prevent
-        audit logging failures from breaking the application.
+        Creates file if it doesn't exist. All file write operations are protected
+        by threading.Lock to ensure thread-safety during parallel tool execution.
+        Handles errors gracefully to prevent audit logging failures from breaking
+        the application.
         
         Args:
-            log_entry: Dictionary containing log entry data
+            log_entry: Dictionary containing log entry data. Must be JSON-serializable.
+                Expected keys include: timestamp, correlation_id, agent_id, event_type,
+                and other event-specific fields.
+        
+        Returns:
+            None. Writes log entry to file or returns silently if logging is disabled.
+        
+        Raises:
+            None. Exceptions during file write are caught and logged, but do not propagate
+            to prevent audit logging failures from breaking the application.
         """
         if not self.enabled or not self.current_log_file:
             return
         
         try:
-            # Append log entry as JSON line to the current run's file
-            with open(self.current_log_file, "a", encoding="utf-8") as f:
-                json.dump(log_entry, f, ensure_ascii=False, default=str)
-                f.write("\n")
+            # Thread-safe file write operation
+            with self._lock:
+                # Append log entry as JSON line to the current run's file
+                with open(self.current_log_file, "a", encoding="utf-8") as f:
+                    json.dump(log_entry, f, ensure_ascii=False, default=str)
+                    f.write("\n")
             
             logger.debug(f"Audit log entry written: {log_entry.get('correlation_id')}")
         except Exception as e:
@@ -252,6 +296,14 @@ class AuditLogger:
             context: Optional dictionary with additional context information
                 (e.g., user message, conversation history, etc.)
             status: Execution status - "success" or "error"
+        
+        Returns:
+            None. Writes log entry to audit log file.
+        
+        Raises:
+            None. Exceptions during logging are caught and logged internally,
+            but do not propagate to prevent audit logging failures from breaking
+            the application.
         
         Example:
             >>> logger = AuditLogger()
@@ -314,6 +366,14 @@ class AuditLogger:
             details: Dictionary containing action-specific details
             status: Action status - "success" or "error"
         
+        Returns:
+            None. Writes log entry to audit log file.
+        
+        Raises:
+            None. Exceptions during logging are caught and logged internally,
+            but do not propagate to prevent audit logging failures from breaking
+            the application.
+        
         Example:
             >>> logger = AuditLogger()
             >>> logger.log_agent_action(
@@ -361,7 +421,11 @@ def get_audit_logger() -> AuditLogger:
     instance on subsequent calls. This ensures all modules share the same logger.
     
     Returns:
-        The shared AuditLogger instance
+        AuditLogger: The shared AuditLogger instance. Creates a new instance
+        on first call and returns the same instance on subsequent calls.
+    
+    Raises:
+        OSError: If log directory cannot be created during first initialization.
     """
     global _shared_audit_logger
     if _shared_audit_logger is None:

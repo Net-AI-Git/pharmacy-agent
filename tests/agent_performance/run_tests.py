@@ -148,12 +148,18 @@ def main():
             
             # Add to summary
             stats = result_data["output"]["statistics"]
+            evaluation = result_data.get("evaluation", {})
+            eval_summary = evaluation.get("summary", {})
+            
             results_summary.append({
                 "test_name": result_data["test_name"],
                 "status": "success",
                 "api_calls": stats.get("total_api_calls", 0),
                 "tool_calls": stats.get("total_tool_calls", 0),
                 "time": stats.get("total_time", 0),
+                "efficiency_score": eval_summary.get("efficiency_score", 0),
+                "estimated_cost": eval_summary.get("estimated_cost_usd", 0),
+                "total_tokens": eval_summary.get("total_tokens", 0),
                 "json_path": json_path,
                 "md_path": md_path
             })
@@ -180,6 +186,12 @@ def main():
             print(f"  API Calls: {summary['api_calls']}")
             print(f"  Tool Calls: {summary['tool_calls']}")
             print(f"  Time: {summary['time']:.3f}s")
+            if summary.get("efficiency_score") is not None:
+                print(f"  Efficiency Score: {summary['efficiency_score']}/100")
+            if summary.get("estimated_cost") is not None:
+                print(f"  Estimated Cost: ${summary['estimated_cost']:.6f}")
+            if summary.get("total_tokens") is not None:
+                print(f"  Total Tokens: {summary['total_tokens']:,}")
             print(f"  Results: {summary['json_path']}")
         else:
             print(f"\n✗ {summary['test_name']}")

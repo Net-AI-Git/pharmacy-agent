@@ -69,9 +69,11 @@ def get_tools_for_openai() -> List[Dict[str, Any]]:
                     "This tool enables the AI agent to find medications when users provide "
                     "medication names in natural language. It supports both Hebrew and English "
                     "names, handles partial matches (fuzzy matching), and provides helpful "
-                    "suggestions when no exact match is found. Returns complete medication "
-                    "information including active ingredients, dosage instructions, stock availability, "
-                    "and prescription requirements."
+                    "suggestions when no exact match is found. Returns basic medication "
+                    "information including medication_id, names, active ingredients, dosage forms, "
+                    "dosage instructions, usage instructions, and description. "
+                    "Does NOT return stock availability or prescription requirements - use "
+                    "check_stock_availability and check_prescription_requirement for those."
                 ),
                 "parameters": {
                     "type": "object",

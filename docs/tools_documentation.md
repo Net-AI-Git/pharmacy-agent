@@ -33,7 +33,7 @@ All tools follow these patterns:
 Enables the AI agent to find medications when users provide medication names in natural language. Supports both Hebrew and English names, handles partial matches (fuzzy matching), and provides helpful suggestions when no exact match is found.
 
 **Implementation (What):**
-Uses DatabaseManager to search the medication database by name. Supports case-insensitive partial matching in both Hebrew and English. Returns complete medication information including required fields (active_ingredients, dosage_instructions). If no exact match is found, returns error with suggestions based on similar names. Uses module-level caching for DatabaseManager.
+Uses DatabaseManager to search the medication database by name. Supports case-insensitive partial matching in both Hebrew and English. Returns basic medication information including required fields (active_ingredients, dosage_instructions). Does NOT return stock availability or prescription requirements - use check_stock_availability and check_prescription_requirement for those. If no exact match is found, returns error with suggestions based on similar names. Uses module-level caching for DatabaseManager.
 
 **Parameters:**
 - `name` (str, required): The medication name to search for (case-insensitive, supports partial matches)
@@ -41,7 +41,7 @@ Uses DatabaseManager to search the medication database by name. Supports case-in
 
 **Returns:**
 - `Dict[str, Any]`: Dictionary containing either:
-  - `MedicationSearchResult`: If medication is found (includes all medication details)
+  - `MedicationSearchResult`: If medication is found (includes basic medication details only, no stock/prescription)
   - `MedicationSearchError`: If medication is not found (includes error message and suggestions)
 
 **Success Response Schema:**
@@ -54,12 +54,11 @@ Uses DatabaseManager to search the medication database by name. Supports case-in
     "dosage_forms": ["Tablets", "Capsules"],
     "dosage_instructions": "500-1000mg every 4-6 hours, maximum 4g per day",
     "usage_instructions": "Take with or after food",
-    "requires_prescription": False,
-    "description": "Pain reliever and fever reducer",
-    "available": True,
-    "quantity_in_stock": 150
+    "description": "Pain reliever and fever reducer"
 }
 ```
+
+**Note:** This tool does NOT return `requires_prescription`, `available`, or `quantity_in_stock`. For prescription information, use `check_prescription_requirement(medication_id)`. For stock information, use `check_stock_availability(medication_id)`.
 
 **Error Response Schema:**
 ```python
@@ -339,8 +338,10 @@ result = execute_tool(
 - `language` (Optional[Literal["he", "en"]]): Language filter
 
 #### `MedicationSearchResult`
-- All medication fields plus stock information
+- Basic medication fields only (no stock or prescription information)
 - Includes required fields: `active_ingredients`, `dosage_instructions`
+- Fields: `medication_id`, `name_he`, `name_en`, `active_ingredients`, `dosage_forms`, `dosage_instructions`, `usage_instructions`, `description`
+- Does NOT include: `requires_prescription`, `available`, `quantity_in_stock` (use separate tools for these)
 
 #### `MedicationSearchError`
 - `error` (str): Error message
