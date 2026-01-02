@@ -264,8 +264,10 @@ class TestChatFn:
         
         # Assert
         assert len(result) == 1, f"Expected 1 chunk, got {len(result)}"
-        assert "help" in result[0].lower() or "medication" in result[0].lower(), \
-            f"Expected help message, got {result[0]}"
+        # chat_fn returns tuples of (text_chunk, tool_calls_json)
+        text_chunk = result[0][0] if isinstance(result[0], tuple) else result[0]
+        assert "help" in text_chunk.lower() or "medication" in text_chunk.lower(), \
+            f"Expected help message, got {text_chunk}"
     
     def test_chat_fn_with_whitespace_only_message(self):
         """
@@ -285,8 +287,10 @@ class TestChatFn:
         
         # Assert
         assert len(result) == 1, f"Expected 1 chunk, got {len(result)}"
-        assert "help" in result[0].lower() or "medication" in result[0].lower(), \
-            f"Expected help message, got {result[0]}"
+        # chat_fn returns tuples of (text_chunk, tool_calls_json)
+        text_chunk = result[0][0] if isinstance(result[0], tuple) else result[0]
+        assert "help" in text_chunk.lower() or "medication" in text_chunk.lower(), \
+            f"Expected help message, got {text_chunk}"
     
     def test_chat_fn_with_uninitialized_agent(self):
         """
@@ -312,8 +316,10 @@ class TestChatFn:
             
             # Assert
             assert len(result) == 1, f"Expected 1 chunk, got {len(result)}"
-            assert "initialized" in result[0].lower() or "configuration" in result[0].lower(), \
-                f"Expected error message about initialization, got {result[0]}"
+            # chat_fn returns tuples of (text_chunk, tool_calls_json)
+            text_chunk = result[0][0] if isinstance(result[0], tuple) else result[0]
+            assert "initialized" in text_chunk.lower() or "configuration" in text_chunk.lower(), \
+                f"Expected error message about initialization, got {text_chunk}"
         finally:
             # Restore original agent
             app.main.agent = original_agent
@@ -344,8 +350,10 @@ class TestChatFn:
             
             # Assert
             assert len(result) == 2, f"Expected 2 chunks, got {len(result)}"
-            assert result == ["chunk1", "chunk2"], \
-                f"Expected ['chunk1', 'chunk2'], got {result}"
+            # chat_fn returns tuples of (text_chunk, tool_calls_json)
+            expected = [("chunk1", ""), ("chunk2", "")]
+            assert result == expected, \
+                f"Expected {expected}, got {result}"
             mock_agent.stream_response.assert_called_once()
             call_args = mock_agent.stream_response.call_args
             assert call_args.kwargs['user_message'] == message, \
@@ -382,8 +390,10 @@ class TestChatFn:
             
             # Assert
             assert len(result) == 1, f"Expected 1 chunk (error message), got {len(result)}"
-            assert "error" in result[0].lower() or "apologize" in result[0].lower(), \
-                f"Expected error message, got {result[0]}"
+            # chat_fn returns tuples of (text_chunk, tool_calls_json)
+            text_chunk = result[0][0] if isinstance(result[0], tuple) else result[0]
+            assert "error" in text_chunk.lower() or "apologize" in text_chunk.lower(), \
+                f"Expected error message, got {text_chunk}"
         finally:
             # Restore original agent
             app.main.agent = original_agent
@@ -394,11 +404,11 @@ class TestCreateChatInterface:
     
     def test_create_chat_interface_returns_chatinterface(self):
         """
-        Test that create_chat_interface returns ChatInterface instance.
+        Test that create_chat_interface returns Blocks instance.
         
         Arrange: No setup needed
         Act: Call create_chat_interface()
-        Assert: Returns gr.ChatInterface instance
+        Assert: Returns gr.Blocks instance
         """
         # Arrange
         # No setup needed
@@ -408,9 +418,9 @@ class TestCreateChatInterface:
         result = create_chat_interface()
         
         # Assert
-        assert result is not None, "Expected ChatInterface to be created"
-        assert isinstance(result, gr.ChatInterface), \
-            f"Expected gr.ChatInterface instance, got {type(result)}"
+        assert result is not None, "Expected Blocks interface to be created"
+        assert isinstance(result, gr.Blocks), \
+            f"Expected gr.Blocks instance, got {type(result)}"
     
     def test_create_chat_interface_has_correct_title(self):
         """
