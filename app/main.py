@@ -154,6 +154,50 @@ except Exception as e:
     # #endregion
 
 
+def convert_gradio_history_to_dict_format(
+    gradio_history: List[Dict[str, str]]
+) -> List[Dict[str, str]]:
+    """
+    Convert Gradio 6.0 chat history format (dict) to agent message format.
+    
+    Gradio 6.0 uses list of dicts with 'role' and 'content' keys.
+    """
+    if not gradio_history:
+        return []
+    
+    agent_messages = []
+    for msg in gradio_history:
+        if isinstance(msg, dict) and "role" in msg and "content" in msg:
+            role = msg["role"]
+            content = msg.get("content", "")
+            if content and content.strip():
+                agent_messages.append({"role": role, "content": content})
+    
+    return agent_messages
+
+
+def convert_dict_history_to_gradio_format(
+    history: List[Dict[str, str]]
+) -> List[Dict[str, str]]:
+    """
+    Convert agent message format to Gradio 6.0 format.
+    
+    Returns list of dicts with 'role' and 'content' keys.
+    """
+    if not history:
+        return []
+    
+    gradio_messages = []
+    for msg in history:
+        if isinstance(msg, dict) and "role" in msg and "content" in msg:
+            gradio_messages.append({
+                "role": msg["role"],
+                "content": str(msg.get("content", ""))
+            })
+    
+    return gradio_messages
+
+
 def convert_gradio_history_to_agent_format(
     gradio_history: List[Tuple[str, str]]
 ) -> List[Dict[str, str]]:
@@ -426,7 +470,7 @@ def create_chat_interface() -> gr.Blocks:
         submit_btn = gr.Button("Send", variant="primary", scale=1)
         clear_btn = gr.Button("Clear", scale=1)
         
-        def respond(message: str, history: List[Tuple[str, str]]) -> Generator[Tuple[List[Tuple[str, str]], Any], None, None]:
+        def respond(message: str, history: List[Dict[str, str]]) -> Generator[Tuple[List[Dict[str, str]], Any], None, None]:
             """
             Handle user message and update chat history with tool calls (streaming).
             
@@ -473,51 +517,215 @@ def create_chat_interface() -> gr.Blocks:
                 ...     # Each yield updates the UI immediately
                 ...     pass
             """
-            if not message or not message.strip():
-                yield (history or [], None)
-                return
-            
-            # Add user message to history
-            history = history or []
-            history.append((message, None))
-            
-            # Collect response and tool calls
-            response_text = ""
-            tool_calls_data = None
-            
-            # Stream response chunks in real-time
-            # Each yield updates the UI immediately, providing true streaming experience
-            for chunk, tool_calls_json in chat_fn(message, history[:-1]):
-                # Accumulate text chunks for complete response
-                response_text += chunk
+            try:
+                # #region agent log
+                _debug_log("app/main.py:respond:entry", "respond function called", {"message": message[:50] if message else "", "message_type": str(type(message)), "history_length": len(history) if history else 0, "history_type": str(type(history)), "history_sample": str(history[:2]) if history else "[]", "first_entry_type": str(type(history[0])) if history and len(history) > 0 else "N/A"}, "H1")
+                # #endregion
+                if not message or not message.strip():
+                    # #region agent log
+                    _debug_log("app/main.py:respond:empty", "Empty message detected", {"history_type": str(type(history or [])), "will_yield_empty_dict": True}, "H1")
+                    # #endregion
+                    # Ensure history is a valid list of dicts
+                    valid_history = []
+                    if history:
+                        for entry in history:
+                            if isinstance(entry, dict) and "role" in entry and "content" in entry:
+                                valid_history.append({
+                                    "role": str(entry["role"]),
+                                    "content": str(entry.get("content", ""))
+                                })
+                    yield (valid_history, {})
+                    return
                 
-                # Parse tool calls JSON if present
-                if tool_calls_json:
-                    try:
-                        # Parse JSON string to dict/list for gr.JSON component
-                        tool_calls_data = json.loads(tool_calls_json)
-                    except json.JSONDecodeError:
-                        logger.warning(f"Failed to parse tool calls JSON: {tool_calls_json}")
-                        tool_calls_data = None
+                # Validate history format - Gradio 6.0 uses list of dicts
+                if history is not None and not isinstance(history, list):
+                    # #region agent log
+                    _debug_log("app/main.py:respond:invalid_history", "Invalid history type", {"history_type": str(type(history))}, "H1")
+                    # #endregion
+                    history = []
                 
-                # Update history in real-time for streaming effect
-                # This ensures the chatbot displays text as it arrives, chunk by chunk
-                history[-1] = (message, response_text)
-                yield history, tool_calls_data
-            
-            # Final update to ensure complete response is displayed
-            # This handles edge cases where final chunks might not trigger UI update
-            if response_text:
-                history[-1] = (message, response_text)
-                yield history, tool_calls_data
+                # Clean and validate existing history entries - convert to dict format
+                history = history or []
+                cleaned_history = []
+                for entry in history:
+                    if isinstance(entry, dict) and "role" in entry and "content" in entry:
+                        cleaned_history.append({
+                            "role": str(entry["role"]),
+                            "content": str(entry.get("content", ""))
+                        })
+                    elif isinstance(entry, tuple) and len(entry) == 2:
+                        # Legacy tuple format - convert to dict
+                        user_msg = str(entry[0]) if entry[0] is not None else ""
+                        assistant_msg = str(entry[1]) if entry[1] is not None else ""
+                        if user_msg:
+                            cleaned_history.append({"role": "user", "content": user_msg})
+                        if assistant_msg:
+                            cleaned_history.append({"role": "assistant", "content": assistant_msg})
+                    else:
+                        # #region agent log
+                        _debug_log("app/main.py:respond:invalid_history_entry_initial", "Invalid history entry in initial history", {"entry": str(entry), "entry_type": str(type(entry))}, "H1")
+                        # #endregion
+                original_history = cleaned_history.copy()  # Make a copy to avoid mutations
+                # #region agent log
+                _debug_log("app/main.py:respond:before_append", "Before processing", {"original_history_length": len(original_history), "history_type": str(type(original_history)), "message_type": str(type(message)), "original_history_sample": str(original_history[:2]) if original_history else "[]"}, "H2")
+                # #endregion
+                
+                # Collect response and tool calls
+                response_text = ""
+                tool_calls_data = {}  # Initialize as empty dict (gr.JSON requires dict or list, not None)
+                
+                # Convert original_history to tuple format for chat_fn (legacy format)
+                # Group consecutive user/assistant messages into tuples
+                tuple_history = []
+                i = 0
+                while i < len(original_history):
+                    msg = original_history[i]
+                    if isinstance(msg, dict) and msg.get("role") == "user":
+                        user_content = msg.get("content", "")
+                        assistant_content = ""
+                        # Look for next assistant message
+                        if i + 1 < len(original_history):
+                            next_msg = original_history[i + 1]
+                            if isinstance(next_msg, dict) and next_msg.get("role") == "assistant":
+                                assistant_content = next_msg.get("content", "")
+                                i += 2  # Skip both user and assistant
+                            else:
+                                i += 1  # Only skip user
+                        else:
+                            i += 1
+                        tuple_history.append((user_content, assistant_content))
+                    else:
+                        i += 1
+                
+                # Stream response chunks in real-time
+                # Each yield updates the UI immediately, providing true streaming experience
+                for chunk, tool_calls_json in chat_fn(message, tuple_history):
+                    # Accumulate text chunks for complete response
+                    response_text += chunk
+                    
+                    # Parse tool calls JSON if present
+                    if tool_calls_json:
+                        # #region agent log
+                        _debug_log("app/main.py:respond:tool_calls_json", "Tool calls JSON received", {"tool_calls_json_length": len(tool_calls_json), "tool_calls_json_preview": tool_calls_json[:100]}, "H3")
+                        # #endregion
+                        try:
+                            # Parse JSON string to dict/list for gr.JSON component
+                            tool_calls_data = json.loads(tool_calls_json)
+                            # Validate that it's a dict or list
+                            if not isinstance(tool_calls_data, (dict, list)):
+                                # #region agent log
+                                _debug_log("app/main.py:respond:invalid_tool_calls_type", "Invalid tool_calls_data type", {"tool_calls_data_type": str(type(tool_calls_data))}, "H3")
+                                # #endregion
+                                tool_calls_data = {}
+                            # #region agent log
+                            _debug_log("app/main.py:respond:tool_calls_parsed", "Tool calls parsed successfully", {"tool_calls_data_type": str(type(tool_calls_data)), "is_none": tool_calls_data is None}, "H3")
+                            # #endregion
+                        except json.JSONDecodeError as e:
+                            logger.warning(f"Failed to parse tool calls JSON: {tool_calls_json}")
+                            # #region agent log
+                            _debug_log("app/main.py:respond:json_parse_error", "JSON parse error", {"error": str(e), "tool_calls_json_preview": tool_calls_json[:100]}, "H3")
+                            # #endregion
+                            tool_calls_data = {}
+                    
+                    # Update history in real-time for streaming effect
+                    # This ensures the chatbot displays text as it arrives, chunk by chunk
+                    # Build history from original_history + current user message + streaming assistant response
+                    # IMPORTANT: Always use original_history, never use the history parameter that Gradio passes back
+                    updated_history = []
+                    # Add all previous messages from original history (make copies to avoid mutations)
+                    for msg in original_history:
+                        if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                            updated_history.append({
+                                "role": str(msg["role"]),
+                                "content": str(msg.get("content", ""))
+                            })
+                    # Add current user message (only once)
+                    updated_history.append({"role": "user", "content": message})
+                    # Add/update assistant response (this will be updated on each yield)
+                    updated_history.append({"role": "assistant", "content": response_text if response_text else ""})
+                    # #region agent log
+                    _debug_log("app/main.py:respond:history_built", "History built for yield", {"original_history_length": len(original_history), "updated_history_length": len(updated_history), "response_text_length": len(response_text)}, "H4")
+                    # #endregion
+                    # Ensure tool_calls_data is never None (gr.JSON requires dict or list, not None)
+                    if tool_calls_data is None:
+                        tool_calls_data = {}
+                    # Ensure tool_calls_data is dict or list (not other types)
+                    if not isinstance(tool_calls_data, (dict, list)):
+                        # #region agent log
+                        _debug_log("app/main.py:respond:invalid_tool_calls_before_yield", "Invalid tool_calls_data type before yield", {"tool_calls_data_type": str(type(tool_calls_data))}, "H4")
+                        # #endregion
+                        tool_calls_data = {}
+                    # #region agent log
+                    _debug_log("app/main.py:respond:before_yield", "Before yielding", {"history_length": len(updated_history), "history_type": str(type(updated_history)), "tool_calls_data_type": str(type(tool_calls_data)), "tool_calls_data_is_none": tool_calls_data is None, "response_text_length": len(response_text)}, "H4")
+                    # #endregion
+                    yield updated_history, tool_calls_data
+                
+                # Final update to ensure complete response is displayed
+                # This handles edge cases where final chunks might not trigger UI update
+                if response_text:
+                    # Build final history from original_history + current user message + final assistant response
+                    final_history = []
+                    # Add all previous messages from original history
+                    for msg in original_history:
+                        if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                            final_history.append({
+                                "role": str(msg["role"]),
+                                "content": str(msg.get("content", ""))
+                            })
+                    # Add current user message
+                    final_history.append({"role": "user", "content": message})
+                    # Add final assistant response
+                    final_history.append({"role": "assistant", "content": response_text})
+                    # Ensure tool_calls_data is never None (gr.JSON requires dict or list, not None)
+                    if tool_calls_data is None:
+                        tool_calls_data = {}
+                    # Ensure tool_calls_data is dict or list (not other types)
+                    if not isinstance(tool_calls_data, (dict, list)):
+                        # #region agent log
+                        _debug_log("app/main.py:respond:invalid_tool_calls_final", "Invalid tool_calls_data type in final yield", {"tool_calls_data_type": str(type(tool_calls_data))}, "H4")
+                        # #endregion
+                        tool_calls_data = {}
+                    # #region agent log
+                    _debug_log("app/main.py:respond:final_yield", "Final yield", {"history_length": len(final_history), "tool_calls_data_type": str(type(tool_calls_data)), "tool_calls_data_is_none": tool_calls_data is None}, "H4")
+                    # #endregion
+                    yield final_history, tool_calls_data
+            except Exception as e:
+                # #region agent log
+                _debug_log("app/main.py:respond:exception", "Exception in respond function", {"error": str(e), "error_type": str(type(e))}, "H1")
+                # #endregion
+                logger.error(f"Error in respond function: {str(e)}", exc_info=True)
+                # Return error state with valid types - ensure history format is correct (dict format)
+                error_history = []
+                if history:
+                    for entry in history:
+                        if isinstance(entry, dict) and "role" in entry and "content" in entry:
+                            error_history.append({
+                                "role": str(entry["role"]),
+                                "content": str(entry.get("content", ""))
+                            })
+                        elif isinstance(entry, tuple) and len(entry) == 2:
+                            # Legacy format - convert to dict
+                            user_msg = str(entry[0]) if entry[0] is not None else ""
+                            assistant_msg = str(entry[1]) if entry[1] is not None else ""
+                            if user_msg:
+                                error_history.append({"role": "user", "content": user_msg})
+                            if assistant_msg:
+                                error_history.append({"role": "assistant", "content": assistant_msg})
+                yield error_history, {}
         
-        def clear_chat() -> Tuple[List, None]:
+        def clear_chat() -> Tuple[List[Dict[str, str]], dict]:
             """Clear chat history and tool calls display."""
-            return [], None
+            # #region agent log
+            _debug_log("app/main.py:clear_chat", "clear_chat called", {"will_return_empty_dict": True}, "H5")
+            # #endregion
+            return [], {}
         
         # Connect components with streaming support
         # Gradio automatically detects generators and enables streaming
         # The respond function yields updates in real-time, updating the UI chunk by chunk
+        # #region agent log
+        _debug_log("app/main.py:connect_components", "Connecting Gradio components", {"msg_type": str(type(msg)), "chatbot_type": str(type(chatbot)), "tool_calls_display_type": str(type(tool_calls_display))}, "H5")
+        # #endregion
         msg.submit(
             respond,
             inputs=[msg, chatbot],

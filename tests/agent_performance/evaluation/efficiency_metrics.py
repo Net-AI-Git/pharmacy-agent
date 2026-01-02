@@ -63,11 +63,22 @@ def analyze_efficiency(result_data: Dict[str, Any]) -> Dict[str, Any]:
         model = result_data.get("input", {}).get("parameters", {}).get("model", "gpt-4")
         system_tokens = count_tokens(system_content, model)
         
-        if system_tokens > 2000:
+        if system_tokens > 2500:
             issues.append({
                 "type": "large_system_prompt",
                 "tokens": system_tokens,
-                "severity": "medium",
+                "severity": "critical",
+                "description": f"System prompt is {system_tokens} tokens"
+            })
+            recommendations.append(
+                f"System prompt is {system_tokens} tokens. Consider reducing to <2000 tokens "
+                "to improve efficiency and reduce costs."
+            )
+        elif system_tokens > 2000:
+            issues.append({
+                "type": "large_system_prompt",
+                "tokens": system_tokens,
+                "severity": "high",
                 "description": f"System prompt is {system_tokens} tokens"
             })
             recommendations.append(
@@ -78,7 +89,7 @@ def analyze_efficiency(result_data: Dict[str, Any]) -> Dict[str, Any]:
             issues.append({
                 "type": "large_system_prompt",
                 "tokens": system_tokens,
-                "severity": "low",
+                "severity": "medium",
                 "description": f"System prompt is {system_tokens} tokens"
             })
     
@@ -201,12 +212,32 @@ def calculate_efficiency_score(
     
     for issue in issues:
         severity = issue.get("severity", "low")
-        if severity == "high":
-            score -= 10
+        if severity == "critical":
+            score -= 25
+        elif severity == "high":
+            score -= 15
         elif severity == "medium":
-            score -= 5
+            score -= 8
         else:  # low
             score -= 2
+        
+        # Additional penalty for large_system_prompt
+        if issue.get("type") == "large_system_prompt":
+            tokens = issue.get("tokens", 0)
+            if tokens > 2500:
+                score -= 10  # Additional penalty on top of critical
+            elif tokens > 2000:
+                score -= 5   # Additional penalty on top of high
+    
+    # Penalize if system prompt is too large relative to input
+    system_prompt_tokens = token_usage.get("system_prompt_tokens", 0)
+    total_input_tokens = token_usage.get("total_input_tokens", 0)
+    if total_input_tokens > 0 and system_prompt_tokens > 0:
+        system_prompt_ratio = system_prompt_tokens / total_input_tokens
+        if system_prompt_ratio > 0.75:
+            score -= 10  # System prompt too heavy relative to input
+        elif system_prompt_ratio > 0.60:
+            score -= 5
     
     # Bonus for efficient usage (low token count, few iterations)
     stats = result_data.get("output", {}).get("statistics", {})

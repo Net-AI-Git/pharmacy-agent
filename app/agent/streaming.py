@@ -23,6 +23,7 @@ import logging
 import concurrent.futures
 from typing import List, Dict, Any, Optional, Generator
 from openai import OpenAI
+import httpx
 from dotenv import load_dotenv
 from app.prompts.system_prompt import get_system_prompt
 from app.tools.registry import get_tools_for_openai, execute_tool
@@ -37,6 +38,15 @@ logger = logging.getLogger(__name__)
 
 # Module-level audit logger instance
 _audit_logger = AuditLogger()
+
+# Shared HTTP client with connection pooling for improved performance
+_http_client = httpx.Client(
+    http2=True,  # HTTP/2 for faster streaming
+    limits=httpx.Limits(
+        max_keepalive_connections=10,
+        max_connections=20
+    )
+)
 
 
 class StreamingAgent:
@@ -94,7 +104,18 @@ class StreamingAgent:
             logger.error(error_msg)
             raise ValueError(error_msg)
         
-        self.client = OpenAI(api_key=api_key)
+        # Configure OpenAI client with timeout and connection pooling for improved streaming performance
+        self.client = OpenAI(
+            api_key=api_key,
+            http_client=_http_client,
+            timeout=httpx.Timeout(
+                connect=10.0,      # Maximum connection time
+                read=60.0,         # Maximum read time (for streaming)
+                write=10.0,        # Maximum write time
+                pool=5.0           # Connection pool timeout
+            ),
+            max_retries=2          # Number of retries on failure
+        )
         self.system_prompt = get_system_prompt()
         self.tools = get_tools_for_openai()
         self.model = model
