@@ -100,28 +100,8 @@ Integrates with OpenAI API to provide conversational AI capabilities with real-t
 - Function calling support with tool integration
 - Bilingual support (Hebrew/English)
 - Seamless tool call handling during streaming
-- **Parallel tool execution**: Independent tools execute concurrently using ThreadPoolExecutor for improved performance
-- **Order preservation**: Tool results maintain original order expected by OpenAI API
-- **Error isolation**: One tool's failure doesn't prevent other tools from completing
 
-### 5. Security Layer (`app/security/`)
-
-**Purpose (Why):**
-Provides security and compliance features including rate limiting and audit logging. Ensures system stability, prevents abuse, and maintains complete traceability of all operations for compliance and debugging.
-
-**Components:**
-- `rate_limiter.py`: RateLimiter class for controlling tool execution frequency
-- `audit_logger.py`: AuditLogger class for comprehensive audit trail
-- `correlation.py`: Correlation ID generation for request tracking
-
-**Key Features:**
-- **Thread-safe rate limiting**: Prevents DoS attacks and resource exhaustion with configurable limits
-- **Thread-safe audit logging**: Complete traceability of all operations with correlation IDs
-- **Concurrent execution support**: All security components are thread-safe for parallel tool execution
-- **Configurable limits**: Rate limits configurable via environment variables
-- **Structured logging**: JSON-based audit logs for easy analysis
-
-### 6. UI Layer (`app/main.py`)
+### 5. UI Layer (`app/main.py`)
 
 **Purpose (Why):**
 Provides the user interface using Gradio, enabling web-based interaction with the AI agent.
@@ -155,26 +135,6 @@ User Query → Agent → check_stock_availability() → DatabaseManager → Medi
 User Query → Agent → check_prescription_requirement() → DatabaseManager → Medication Model → Prescription Info → Response
 ```
 
-### Parallel Tool Execution Flow
-
-When multiple independent tools are requested simultaneously, they execute in parallel:
-
-```
-User Query → Agent → [Tool 1, Tool 2, Tool 3] (parallel execution)
-                    ↓
-            ThreadPoolExecutor (max_workers=5)
-                    ↓
-        [Result 1, Result 2, Result 3] (order preserved)
-                    ↓
-            Combined Response
-```
-
-**Benefits:**
-- **Performance**: Up to 33% faster execution for multi-tool scenarios
-- **Order Preservation**: Results maintain original tool call order
-- **Error Isolation**: One tool's failure doesn't affect others
-- **Thread-Safety**: RateLimiter and AuditLogger use locks for safe concurrent access
-
 ## Design Principles
 
 ### 1. Type Safety
@@ -191,8 +151,6 @@ User Query → Agent → [Tool 1, Tool 2, Tool 3] (parallel execution)
 - Module-level caching for DatabaseManager
 - Efficient database queries
 - Minimal redundant operations
-- **Parallel tool execution**: Independent tools execute concurrently using ThreadPoolExecutor, reducing total execution time by up to 33% for multi-tool scenarios
-- **Thread-safe components**: RateLimiter and AuditLogger use threading.Lock for safe concurrent access
 
 ### 4. Maintainability
 - Clear separation of concerns
@@ -204,8 +162,6 @@ User Query → Agent → [Tool 1, Tool 2, Tool 3] (parallel execution)
 - Safe defaults for prescription requirements
 - Required field validation
 - Input sanitization
-- **Thread-safety**: Critical components (RateLimiter, AuditLogger) are thread-safe for parallel execution
-- **Rate limiting**: Prevents resource exhaustion and infinite loops with configurable limits
 
 ## Technology Stack
 
@@ -224,7 +180,7 @@ Wond/
 │   ├── main.py                 # Application entry point
 │   ├── agent/                  # Agent implementation
 │   │   ├── __init__.py
-│   │   └── streaming.py        # StreamingAgent class (parallel execution)
+│   │   └── streaming.py        # StreamingAgent class
 │   ├── database/               # Database management
 │   │   ├── __init__.py
 │   │   └── db.py              # DatabaseManager
@@ -239,11 +195,6 @@ Wond/
 │   │   ├── inventory_tools.py
 │   │   ├── prescription_tools.py
 │   │   └── registry.py
-│   ├── security/               # Security components
-│   │   ├── __init__.py
-│   │   ├── rate_limiter.py    # Thread-safe rate limiting
-│   │   ├── audit_logger.py    # Thread-safe audit logging
-│   │   └── correlation.py     # Correlation ID generation
 │   └── prompts/                # System prompts
 │       └── __init__.py
 ├── data/
@@ -279,9 +230,6 @@ logger = logging.getLogger(__name__)
 2. **Input Validation**: All inputs validated before processing
 3. **Safe Defaults**: Prescription requirements default to "required" on errors
 4. **No Medical Advice**: Agent explicitly prohibited from giving medical advice
-5. **Rate Limiting**: Thread-safe rate limiting prevents DoS attacks and resource exhaustion
-6. **Audit Logging**: Thread-safe audit logging ensures complete traceability of all operations
-7. **Thread-Safety**: Critical security components use threading.Lock to prevent race conditions
 
 ## Future Enhancements
 

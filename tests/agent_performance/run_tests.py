@@ -24,6 +24,7 @@ if str(project_root) not in sys.path:
 from tests.agent_performance.test_runner import load_test_config, run_single_test, list_available_tests
 from tests.agent_performance.result_manager import get_or_create_run_directory, save_test_result
 from tests.agent_performance.formatters import format_json, format_markdown
+from tests.agent_performance.comparison_report import generate_run_comparison_report
 from app.security.audit_logger import get_audit_logger
 
 # Configure logging
@@ -116,6 +117,7 @@ def main():
     
     # Run tests
     results_summary = []
+    current_results = []  # Store full results for comparison
     
     for config_path in test_configs:
         try:
@@ -151,7 +153,7 @@ def main():
             evaluation = result_data.get("evaluation", {})
             eval_summary = evaluation.get("summary", {})
             
-            results_summary.append({
+            summary_entry = {
                 "test_name": result_data["test_name"],
                 "status": "success",
                 "api_calls": stats.get("total_api_calls", 0),
@@ -162,11 +164,24 @@ def main():
                 "total_tokens": eval_summary.get("total_tokens", 0),
                 "json_path": json_path,
                 "md_path": md_path
+            }
+            results_summary.append(summary_entry)
+            
+            # Store full result for comparison
+            current_results.append({
+                "test_name": result_data["test_name"],
+                "status": "success",
+                "result_data": result_data
             })
             
         except Exception as e:
             logger.error(f"Error running test {config_path.name}: {e}", exc_info=True)
             results_summary.append({
+                "test_name": config_path.stem,
+                "status": "error",
+                "error": str(e)
+            })
+            current_results.append({
                 "test_name": config_path.stem,
                 "status": "error",
                 "error": str(e)
@@ -196,6 +211,22 @@ def main():
         else:
             print(f"\n✗ {summary['test_name']}")
             print(f"  Error: {summary.get('error', 'Unknown error')}")
+    
+    print("\n" + "=" * 60)
+    
+    # Generate comparison report
+    try:
+        logger.info("Generating comparison report")
+        comparison_report_path = generate_run_comparison_report(
+            current_results=current_results,
+            run_directory=run_dir_path,
+            results_dir=args.output_dir
+        )
+        print(f"\n📊 Comparison Report: {comparison_report_path}")
+        logger.info(f"Comparison report generated: {comparison_report_path}")
+    except Exception as e:
+        logger.warning(f"Error generating comparison report: {e}", exc_info=True)
+        print(f"\n⚠️  Warning: Could not generate comparison report: {e}")
     
     print("\n" + "=" * 60)
     

@@ -369,7 +369,8 @@ class StreamingAgent:
         self,
         user_message: str,
         conversation_history: Optional[List[Dict[str, str]]] = None,
-        agent_id: Optional[str] = None
+        agent_id: Optional[str] = None,
+        include_tool_calls: bool = False
     ) -> Generator[str, None, None]:
         """
         Stream agent response in real-time as a generator.
@@ -399,10 +400,18 @@ class StreamingAgent:
                 between different sessions.
             agent_id: Optional identifier for the agent/session. Used for audit logging.
                 Defaults to "default" for stateless agents.
+            include_tool_calls: If True, yields special JSON markers for tool calls
+                that can be captured by the UI layer. If False, only yields text chunks (default).
+                When True, tool call information is embedded in the stream as special markers
+                that can be extracted and displayed separately in the UI.
         
         Yields:
             String chunks containing parts of the agent's response. Each yield is a
-            piece of text that should be displayed to the user in real-time.
+            piece of text that should be displayed to the user in real-time. When
+            include_tool_calls=True, may yield special JSON markers for tool calls
+            in the format [TOOL_CALL_START]{...}[/TOOL_CALL_START] and
+            [TOOL_CALL_RESULT]{...}[/TOOL_CALL_RESULT] that can be extracted and
+            displayed separately in the UI.
         
         Raises:
             Exception: If OpenAI API call fails or other errors occur
@@ -535,6 +544,18 @@ class StreamingAgent:
                     
                     logger.info(f"Model requested {len(tool_calls_collected)} tool calls during streaming")
                     
+                    # If include_tool_calls is True, yield tool call information before execution
+                    # This allows the UI to display tool calls as they happen
+                    if include_tool_calls:
+                        for tool_call in tool_calls_collected:
+                            tool_call_info = {
+                                "type": "tool_call_start",
+                                "tool_name": tool_call.get("function", {}).get("name", ""),
+                                "tool_id": tool_call.get("id", ""),
+                                "arguments": json.loads(tool_call.get("function", {}).get("arguments", "{}"))
+                            }
+                            yield f"\n\n[TOOL_CALL_START]{json.dumps(tool_call_info, ensure_ascii=False)}[/TOOL_CALL_START]\n\n"
+                    
                     # Execute tools with correlation ID for audit logging
                     tool_messages = self._process_tool_calls(
                         tool_calls_collected,
@@ -542,6 +563,19 @@ class StreamingAgent:
                         agent_id=effective_agent_id,
                         context=context
                     )
+                    
+                    # If include_tool_calls is True, yield tool call results after execution
+                    if include_tool_calls:
+                        for tool_call, tool_message in zip(tool_calls_collected, tool_messages):
+                            tool_result_info = {
+                                "type": "tool_call_result",
+                                "tool_name": tool_call.get("function", {}).get("name", ""),
+                                "tool_id": tool_call.get("id", ""),
+                                "result": json.loads(tool_message.get("content", "{}")),
+                                "success": json.loads(tool_message.get("content", "{}")).get("success", True)
+                            }
+                            yield f"\n\n[TOOL_CALL_RESULT]{json.dumps(tool_result_info, ensure_ascii=False)}[/TOOL_CALL_RESULT]\n\n"
+                    
                     messages.extend(tool_messages)
                     
                     # Continue loop to get model's response to tool results (with streaming)

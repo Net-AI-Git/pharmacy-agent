@@ -1,8 +1,11 @@
 """
 Main entry point for the Pharmacy AI Agent application.
 
-This module serves as the application entry point. Currently in development.
+This module serves as the application entry point, delegating to app.main.main()
+for the actual application logic.
 """
 
-# TODO: Implement main application logic
-# This will be implemented in later tasks according to the implementation guide
+from app.main import main
+
+if __name__ == "__main__":
+    main()

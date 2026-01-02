@@ -213,12 +213,20 @@ def compare_runs(
         for metric, diff_data in comparison["differences"].items():
             percent_change = abs(diff_data.get("percent_change", 0))
             if percent_change > 20:
+                change = diff_data.get("difference", 0)
+                # Determine direction: for efficiency_score, positive change is improvement
+                # For other metrics (API calls, time, tokens), negative change is improvement
+                if metric == "efficiency_score":
+                    direction = "improvement" if change > 0 else "regression"
+                else:
+                    direction = "improvement" if change < 0 else "regression"
+                
                 significant_changes.append({
                     "metric": metric,
                     "run": prev_run.get("run_name", "unknown"),
-                    "change": diff_data.get("difference", 0),
+                    "change": change,
                     "percent_change": diff_data.get("percent_change", 0),
-                    "direction": "improvement" if diff_data.get("difference", 0) < 0 and metric != "efficiency_score" else "regression"
+                    "direction": direction
                 })
     
     # Calculate trends (comparing with most recent previous run)
