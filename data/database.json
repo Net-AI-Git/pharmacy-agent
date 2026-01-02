@@ -64,8 +64,9 @@
   "medications": [
     {
       "medication_id": "med_001",
-      "name_he": "Acamol",
+      "name_he": "אקמול",
       "name_en": "Acetaminophen",
+      "brand_names": ["Acamol"],
       "active_ingredients": ["Paracetamol 500mg"],
       "dosage_forms": ["Tablets", "Capsules"],
       "dosage_instructions": "500-1000mg every 4-6 hours, maximum 4g per day",
@@ -80,7 +81,7 @@
     },
     {
       "medication_id": "med_002",
-      "name_he": "Aspirin",
+      "name_he": "אספירין",
       "name_en": "Aspirin",
       "active_ingredients": ["Acetylsalicylic acid 100mg"],
       "dosage_forms": ["Tablets"],
@@ -96,7 +97,7 @@
     },
     {
       "medication_id": "med_003",
-      "name_he": "Amoxicillin",
+      "name_he": "אמוקסיצילין",
       "name_en": "Amoxicillin",
       "active_ingredients": ["Amoxicillin 500mg"],
       "dosage_forms": ["Capsules", "Tablets"],
@@ -112,7 +113,7 @@
     },
     {
       "medication_id": "med_004",
-      "name_he": "Ibuprofen",
+      "name_he": "איבופרופן",
       "name_en": "Ibuprofen",
       "active_ingredients": ["Ibuprofen 400mg"],
       "dosage_forms": ["Tablets", "Capsules"],
@@ -128,7 +129,7 @@
     },
     {
       "medication_id": "med_005",
-      "name_he": "Metformin",
+      "name_he": "מטפורמין",
       "name_en": "Metformin",
       "active_ingredients": ["Metformin hydrochloride 500mg"],
       "dosage_forms": ["Tablets"],

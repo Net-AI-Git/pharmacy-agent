@@ -276,7 +276,16 @@ def execute_tool(
         # Record the call for rate limit tracking (after successful execution)
         _rate_limiter.record_call(tool_name, effective_agent_id)
         
-        # Log successful tool execution to audit log
+        # Determine status based on result content, not just execution success
+        # Check if result contains an error field or success=False
+        if isinstance(result, dict):
+            has_error = "error" in result or result.get("success") is False
+            status = "error" if has_error else "success"
+        else:
+            # If result is not a dict, assume success (tool executed without exception)
+            status = "success"
+        
+        # Log tool execution to audit log with appropriate status
         _audit_logger.log_tool_call(
             correlation_id=effective_correlation_id,
             tool_name=tool_name,
@@ -284,10 +293,14 @@ def execute_tool(
             arguments=filtered_arguments,
             result=result,
             context=context,
-            status="success"
+            status=status
         )
         
-        logger.debug(f"Tool {tool_name} executed successfully")
+        if status == "success":
+            logger.debug(f"Tool {tool_name} executed successfully")
+        else:
+            logger.debug(f"Tool {tool_name} executed but returned error result")
+        
         return result
     except Exception as e:
         error_result = {

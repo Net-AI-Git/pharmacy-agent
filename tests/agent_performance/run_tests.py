@@ -24,6 +24,7 @@ if str(project_root) not in sys.path:
 from tests.agent_performance.test_runner import load_test_config, run_single_test, list_available_tests
 from tests.agent_performance.result_manager import get_or_create_run_directory, save_test_result
 from tests.agent_performance.formatters import format_json, format_markdown
+from app.security.audit_logger import get_audit_logger
 
 # Configure logging
 logging.basicConfig(
@@ -72,6 +73,10 @@ def main():
     )
     
     args = parser.parse_args()
+    
+    # Start a new audit log run for this test session
+    audit_logger = get_audit_logger()
+    audit_logger.start_new_run()
     
     # List available tests if requested
     if args.list:

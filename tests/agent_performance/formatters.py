@@ -13,6 +13,9 @@ Markdown with sections for input, processing details, output, and statistics.
 import json
 from datetime import datetime
 from typing import Dict, Any
+import os
+# #region agent log
+# #endregion
 
 
 def format_json(result_data: Dict[str, Any]) -> str:
@@ -124,19 +127,45 @@ def format_markdown(result_data: Dict[str, Any]) -> str:
         messages = api_call.get("messages", [])
         if messages:
             lines.append("- **Messages Sent:**")
-            for msg in messages[:3]:  # Show first 3 messages
+            for msg in messages:  # Show all messages
                 role = msg.get("role", "unknown")
-                content = msg.get("content", "")
+                content = msg.get("content")  # Get content (may be None)
+                if content is None:
+                    content = ""  # Normalize None to empty string
+                # #region agent log
+                with open(r'c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"pre-fix","hypothesisId":"A","location":"formatters.py:129","message":"Processing message","data":{"role":role,"content_is_none_original":msg.get("content") is None,"content_type":type(content).__name__,"has_content_key":"content" in msg},"timestamp":int(datetime.now().timestamp()*1000)})+"\n")
+                # #endregion
                 if role == "system":
-                    content_preview = content[:50] + "..." if len(content) > 50 else content
-                    lines.append(f"  - System: {content_preview}")
+                    # #region agent log
+                    with open(r'c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"pre-fix","hypothesisId":"A","location":"formatters.py:134","message":"Before system content check","data":{"content_is_none":content is None,"content_length":len(content) if content else 0},"timestamp":int(datetime.now().timestamp()*1000)})+"\n")
+                    # #endregion
+                    # Show only first line of system message content
+                    first_line = content.split('\n')[0] if content else ""
+                    lines.append(f"  - System: {first_line}")
                 elif role == "user":
                     lines.append(f"  - User: \"{content}\"")
                 elif role == "assistant":
-                    content_preview = content[:50] + "..." if len(content) > 50 else content
-                    lines.append(f"  - Assistant: {content_preview}")
-            if len(messages) > 3:
-                lines.append(f"  - ... and {len(messages) - 3} more messages")
+                    # #region agent log
+                    with open(r'c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"pre-fix","hypothesisId":"A","location":"formatters.py:141","message":"Before assistant content check","data":{"content_is_none":content is None,"content_length":len(content) if content else 0},"timestamp":int(datetime.now().timestamp()*1000)})+"\n")
+                    # #endregion
+                    # Show full assistant message content, including tool_calls if present
+                    assistant_line = f"  - Assistant: {content}" if content else "  - Assistant: "
+                    if msg.get("tool_calls"):
+                        tool_calls_info = []
+                        for tc in msg.get("tool_calls", []):
+                            func = tc.get("function", {}) if isinstance(tc, dict) else getattr(tc, "function", {})
+                            tool_name = func.get("name", "unknown") if isinstance(func, dict) else getattr(func, "name", "unknown")
+                            tool_calls_info.append(tool_name)
+                        assistant_line += f" [Tool Calls: {', '.join(tool_calls_info)}]"
+                    lines.append(assistant_line)
+                elif role == "tool":
+                    tool_call_id = msg.get("tool_call_id", "unknown")
+                    tool_result = msg.get("content", "")
+                    tool_result_preview = tool_result[:200] + "..." if len(tool_result) > 200 else tool_result
+                    lines.append(f"  - Tool (ID: {tool_call_id}): {tool_result_preview}")
         
         # Parameters
         api_params = api_call.get("parameters", {})
@@ -148,29 +177,42 @@ def format_markdown(result_data: Dict[str, Any]) -> str:
             lines.append(f"  - Temperature: {api_params.get('temperature')}")
         lines.append(f"  - Stream: {api_params.get('stream', False)}")
         
-        # Stream Chunks
+        # Collect all reasoning/thinking from chunks before tool calls
         chunks = api_call.get("chunks", [])
+        all_reasoning = []
+        all_thinking = []
+        
+        if chunks:
+            for chunk in chunks:
+                thinking = chunk.get("thinking")
+                reasoning = chunk.get("reasoning")
+                if thinking:
+                    all_thinking.append(thinking)
+                if reasoning:
+                    all_reasoning.append(reasoning)
+        
+        # Show reasoning/thinking if available (before tool calls)
+        if all_reasoning or all_thinking:
+            lines.append("- **Reasoning/Thinking:**")
+            if all_reasoning:
+                # Combine all reasoning chunks
+                full_reasoning = " ".join(all_reasoning)
+                lines.append(f"  - Reasoning: {full_reasoning}")
+            if all_thinking:
+                # Combine all thinking chunks
+                full_thinking = " ".join(all_thinking)
+                lines.append(f"  - Thinking: {full_thinking}")
+        
+        # Stream Chunks (simplified - just show count and key info)
         if chunks:
             lines.append("- **Stream Chunks:**")
-            for i, chunk in enumerate(chunks[:10], 1):  # Show first 10 chunks
-                content = chunk.get("content", "")
-                finish_reason = chunk.get("finish_reason")
-                thinking = chunk.get("thinking") or chunk.get("reasoning")
-                
-                chunk_info = f"  - Chunk {i}:"
-                if content:
-                    content_preview = content[:30] + "..." if len(content) > 30 else content
-                    chunk_info += f" Content: \"{content_preview}\""
-                if thinking:
-                    thinking_preview = thinking[:30] + "..." if len(thinking) > 30 else thinking
-                    chunk_info += f", Thinking: \"{thinking_preview}\""
-                if finish_reason:
-                    chunk_info += f", Finish Reason: `{finish_reason}`"
-                
-                lines.append(chunk_info)
-            
-            if len(chunks) > 10:
-                lines.append(f"  - ... and {len(chunks) - 10} more chunks")
+            chunks_with_content = sum(1 for c in chunks if c.get("content"))
+            chunks_with_reasoning = sum(1 for c in chunks if c.get("reasoning") or c.get("thinking"))
+            lines.append(f"  - Total Chunks: {len(chunks)}")
+            if chunks_with_content > 0:
+                lines.append(f"  - Chunks with Content: {chunks_with_content}")
+            if chunks_with_reasoning > 0:
+                lines.append(f"  - Chunks with Reasoning/Thinking: {chunks_with_reasoning}")
         
         # Model Response Summary
         accumulated = api_call.get("accumulated_content", "")

@@ -117,6 +117,9 @@ def run_single_test(test_config: Dict[str, Any]) -> Dict[str, Any]:
     # Create traced agent with parameters
     seed = parameters.get("seed")
     temperature = parameters.get("temperature")
+    # If temperature is 0, treat it as None (don't send to model)
+    if temperature == 0:
+        temperature = None
     model = parameters.get("model", "gpt-5")
     
     agent = TracedStreamingAgent(
@@ -160,6 +163,9 @@ def run_single_test(test_config: Dict[str, Any]) -> Dict[str, Any]:
     correlation_id = trace.get("correlation_id")
     
     # Build result structure
+    # Filter out temperature: 0 from parameters (don't send to model)
+    filtered_parameters = {k: v for k, v in parameters.items() if not (k == "temperature" and v == 0)}
+    
     result = {
         "test_name": test_name,
         "timestamp": datetime.now().isoformat(),
@@ -168,7 +174,7 @@ def run_single_test(test_config: Dict[str, Any]) -> Dict[str, Any]:
         "input": {
             "user_message": user_message,
             "conversation_history": conversation_history,
-            "parameters": parameters
+            "parameters": filtered_parameters
         },
         "processing": {
             "iterations": trace.get("iterations", []),

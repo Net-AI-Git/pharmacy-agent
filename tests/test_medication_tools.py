@@ -35,7 +35,7 @@ class TestMedicationTools:
         Assert: Returns medication with all required fields
         """
         # Arrange
-        name = "Acamol"
+        name = "אקמול"
         language = "he"
         
         # Act
@@ -44,7 +44,7 @@ class TestMedicationTools:
         # Assert
         assert "error" not in result, f"Expected success but got error: {result.get('error', 'Unknown error')}"
         assert result["medication_id"] == "med_001", f"Expected medication_id='med_001', got '{result.get('medication_id')}'"
-        assert result["name_he"] == "Acamol", f"Expected name_he='Acamol', got '{result.get('name_he')}'"
+        assert result["name_he"] == "אקמול", f"Expected name_he='אקמול', got '{result.get('name_he')}'"
         assert "active_ingredients" in result, "Result must include active_ingredients (required field)"
         assert len(result["active_ingredients"]) > 0, f"Expected non-empty active_ingredients, got {result.get('active_ingredients')}"
         assert "dosage_instructions" in result, "Result must include dosage_instructions (required field)"

@@ -20,15 +20,15 @@ class TestMedicationSearch:
         Test that search_medications_by_name finds medications by Hebrew name.
         
         Arrange: DatabaseManager instance
-        Act: Call search_medications_by_name("Acamol", "he")
+        Act: Call search_medications_by_name("אקמול", "he")
         Assert: Returns list with at least one Medication
         """
         db = DatabaseManager()
-        meds = db.search_medications_by_name("Acamol", "he")
+        meds = db.search_medications_by_name("אקמול", "he")
         
         assert isinstance(meds, list), f"Expected list, got {type(meds)}"
-        assert len(meds) > 0, f"Expected at least 1 medication for 'Acamol', got {len(meds)}"
-        assert any("Acamol" in med.name_he for med in meds), "At least one medication should have 'Acamol' in Hebrew name"
+        assert len(meds) > 0, f"Expected at least 1 medication for 'אקמול', got {len(meds)}"
+        assert any("אקמול" in med.name_he for med in meds), "At least one medication should have 'אקמול' in Hebrew name"
     
     def test_search_medications_by_name_english(self):
         """
@@ -72,7 +72,10 @@ class TestMedicationSearch:
         
         assert isinstance(meds, list), f"Expected list, got {type(meds)}"
         assert len(meds) > 0, f"Expected at least 1 medication for partial 'Acam', got {len(meds)}"
-        assert any("Acam" in med.name_he or "Acam" in med.name_en for med in meds), (
+        # Check in name_he, name_en, or brand_names (since "Acamol" is a brand name)
+        # Use case-insensitive comparison
+        search_term = "Acam".lower()
+        assert any(search_term in med.name_he.lower() or search_term in med.name_en.lower() or any(search_term in brand.lower() for brand in med.brand_names) for med in meds), (
             "At least one medication should match partial 'Acam'"
         )
     

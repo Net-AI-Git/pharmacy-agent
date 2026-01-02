@@ -148,13 +148,7 @@ class TracedStreamingAgent:
                 "iteration": iteration,
                 "api_call": {
                     "messages": messages.copy(),  # Store messages sent
-                    "parameters": {
-                        "model": self.agent.model,
-                        "seed": self.seed,
-                        "temperature": self.temperature,
-                        "stream": True,
-                        "tool_choice": "auto"
-                    },
+                    "parameters": {},  # Will be updated after building api_params
                     "chunks": [],
                     "accumulated_content": "",
                     "tool_calls_collected": [],
@@ -182,6 +176,18 @@ class TracedStreamingAgent:
                 # If temperature is 0, we don't send it (use model default)
                 if self.temperature is not None and self.temperature != 0:
                     api_params["temperature"] = self.temperature
+                
+                # Update iteration_data with actual parameters sent to API
+                # This ensures we only record parameters that were actually sent
+                iteration_data["api_call"]["parameters"] = {
+                    "model": api_params["model"],
+                    "stream": api_params["stream"],
+                    "tool_choice": api_params["tool_choice"]
+                }
+                if "seed" in api_params:
+                    iteration_data["api_call"]["parameters"]["seed"] = api_params["seed"]
+                if "temperature" in api_params:
+                    iteration_data["api_call"]["parameters"]["temperature"] = api_params["temperature"]
                 
                 # Call OpenAI API with streaming enabled
                 stream = self.agent.client.chat.completions.create(**api_params)

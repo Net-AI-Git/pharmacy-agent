@@ -493,7 +493,7 @@ class TestStreamingAgentToolCallProcessing:
             }
             
             # Act
-            tool_messages = agent._process_tool_calls([mock_tool_call])
+            tool_messages = agent._process_tool_calls([mock_tool_call], correlation_id="test-correlation-123")
             
             # Assert
             assert isinstance(tool_messages, list), \
@@ -525,7 +525,7 @@ class TestStreamingAgentToolCallProcessing:
             mock_execute.side_effect = Exception("Tool execution failed")
             
             # Act
-            tool_messages = agent._process_tool_calls([mock_tool_call])
+            tool_messages = agent._process_tool_calls([mock_tool_call], correlation_id="test-correlation-456")
             
             # Assert
             assert isinstance(tool_messages, list), \

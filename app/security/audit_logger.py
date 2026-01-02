@@ -25,6 +25,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional
 from pathlib import Path
 from dotenv import load_dotenv
+import glob
 
 # Load environment variables
 load_dotenv()
@@ -72,8 +73,9 @@ class AuditLogger:
         Implementation (What):
         Reads log directory from environment variable or uses default. Reads
         enabled flag from environment variable or defaults to True. Creates log
-        directory if it doesn't exist. All configuration is optional to allow
-        flexible setup.
+        directory if it doesn't exist. Creates a new log file for this run and
+        cleans up old files, keeping only the last 5. All configuration is optional
+        to allow flexible setup.
         
         Args:
             log_dir: Directory path for audit logs.
@@ -91,39 +93,110 @@ class AuditLogger:
         # Create log directory if it doesn't exist
         if self.enabled:
             Path(self.log_dir).mkdir(parents=True, exist_ok=True)
+            # Create a new log file for this run
+            self.current_log_file = self._create_new_log_file()
+            # Clean up old files, keeping only the last 5
+            self._cleanup_old_logs()
             logger.info(f"AuditLogger initialized with log directory: {self.log_dir}")
+            logger.info(f"Current log file: {self.current_log_file}")
         else:
+            self.current_log_file = None
             logger.info("AuditLogger initialized but logging is disabled")
     
-    def _get_log_file_path(self) -> str:
+    def _create_new_log_file(self) -> str:
         """
-        Get the log file path for today's date.
+        Create a new log file with a unique timestamp.
         
         Purpose (Why):
-        Organizes logs by date for easy retrieval and analysis. Each day gets
-        its own log file, making it simple to find logs for a specific date
-        or time period.
+        Creates a new log file for each run, ensuring that each run's logs are
+        isolated and don't mix with previous runs. This allows easy identification
+        of logs from a specific run.
         
         Implementation (What):
-        Creates a file path based on today's date in format: YYYY-MM-DD.json
-        in the configured log directory.
+        Creates a file path based on current timestamp in format:
+        audit_YYYY-MM-DD_HH-MM-SS.json in the configured log directory.
         
         Returns:
-            Full path to today's log file
+            Full path to the new log file
         """
-        today = datetime.now().strftime("%Y-%m-%d")
-        return os.path.join(self.log_dir, f"audit_{today}.json")
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        return os.path.join(self.log_dir, f"audit_{timestamp}.json")
+    
+    def _cleanup_old_logs(self, keep_count: int = 5) -> None:
+        """
+        Clean up old audit log files, keeping only the most recent ones.
+        
+        Purpose (Why):
+        Prevents disk space from filling up with old log files. Maintains a
+        rolling window of recent logs for debugging and analysis while removing
+        older files automatically.
+        
+        Implementation (What):
+        Finds all audit log files in the log directory, sorts them by modification
+        time (newest first), and deletes all but the most recent keep_count files.
+        Only processes files matching the audit_*.json pattern.
+        
+        Args:
+            keep_count: Number of recent log files to keep (default: 5)
+        """
+        try:
+            # Find all audit log files
+            pattern = os.path.join(self.log_dir, "audit_*.json")
+            log_files = glob.glob(pattern)
+            
+            if len(log_files) <= keep_count:
+                return
+            
+            # Sort by modification time (newest first)
+            log_files.sort(key=lambda f: os.path.getmtime(f), reverse=True)
+            
+            # Delete old files (keep only the most recent keep_count)
+            files_to_delete = log_files[keep_count:]
+            for file_path in files_to_delete:
+                try:
+                    os.remove(file_path)
+                    logger.debug(f"Deleted old audit log file: {file_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to delete old audit log file {file_path}: {str(e)}")
+            
+            if files_to_delete:
+                logger.info(f"Cleaned up {len(files_to_delete)} old audit log file(s)")
+        except Exception as e:
+            logger.warning(f"Failed to clean up old audit logs: {str(e)}")
+    
+    def start_new_run(self) -> None:
+        """
+        Start a new run by creating a new log file.
+        
+        Purpose (Why):
+        Allows starting a fresh log file for a new run/session. Ensures that
+        each run's logs are isolated in their own file, making it easier to
+        analyze logs from a specific run without mixing with previous runs.
+        
+        Implementation (What):
+        Creates a new log file with a unique timestamp and cleans up old log
+        files, keeping only the 5 most recent ones. This should be called at
+        the start of each run to ensure proper log isolation.
+        """
+        if not self.enabled:
+            return
+        
+        # Create a new log file for this run
+        self.current_log_file = self._create_new_log_file()
+        # Clean up old files, keeping only the last 5
+        self._cleanup_old_logs()
+        logger.info(f"Started new audit log run: {self.current_log_file}")
     
     def _write_log_entry(self, log_entry: Dict[str, Any]) -> None:
         """
-        Write a log entry to the audit log file.
+        Write a log entry to the current audit log file.
         
         Purpose (Why):
         Persists audit log entries to disk for long-term storage and analysis.
         Ensures all operations are recorded for compliance and debugging.
         
         Implementation (What):
-        Appends log entry to today's log file as a JSON line. Uses JSON lines
+        Appends log entry to the current run's log file as a JSON line. Uses JSON lines
         format (one JSON object per line) for easy parsing and streaming.
         Creates file if it doesn't exist. Handles errors gracefully to prevent
         audit logging failures from breaking the application.
@@ -131,14 +204,12 @@ class AuditLogger:
         Args:
             log_entry: Dictionary containing log entry data
         """
-        if not self.enabled:
+        if not self.enabled or not self.current_log_file:
             return
         
         try:
-            log_file_path = self._get_log_file_path()
-            
-            # Append log entry as JSON line
-            with open(log_file_path, "a", encoding="utf-8") as f:
+            # Append log entry as JSON line to the current run's file
+            with open(self.current_log_file, "a", encoding="utf-8") as f:
                 json.dump(log_entry, f, ensure_ascii=False, default=str)
                 f.write("\n")
             
@@ -268,4 +339,32 @@ class AuditLogger:
             f"Logged agent action: {action} by {agent_id} "
             f"(correlation_id: {correlation_id}, status: {status})"
         )
+
+
+# Module-level shared audit logger instance
+# This can be imported and used across the application to ensure
+# all modules use the same logger instance and log file
+_shared_audit_logger = None
+
+
+def get_audit_logger() -> AuditLogger:
+    """
+    Get or create the shared audit logger instance.
+    
+    Purpose (Why):
+    Provides a singleton-like access to the audit logger, ensuring all modules
+    use the same logger instance and write to the same log file. This is important
+    for maintaining consistent logging across the application.
+    
+    Implementation (What):
+    Creates a shared AuditLogger instance on first call and returns the same
+    instance on subsequent calls. This ensures all modules share the same logger.
+    
+    Returns:
+        The shared AuditLogger instance
+    """
+    global _shared_audit_logger
+    if _shared_audit_logger is None:
+        _shared_audit_logger = AuditLogger()
+    return _shared_audit_logger
 

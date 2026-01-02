@@ -260,6 +260,34 @@ class DatabaseManager:
                 name_en = med_data.get("name_en", "").lower()
                 if name_lower in name_en:
                     results.append(Medication(**med_data))
+                    continue
+            
+            # Search in brand names (regardless of language filter)
+            # This allows finding medications by their brand names
+            # e.g., "Acamol" will find medications with "Acamol" in brand_names
+            brand_names = med_data.get("brand_names", [])
+            found_in_brands = False
+            for brand_name in brand_names:
+                if name_lower in brand_name.lower():
+                    results.append(Medication(**med_data))
+                    found_in_brands = True
+                    break
+            
+            if found_in_brands:
+                continue
+            
+            # Search in active ingredients (regardless of language filter)
+            # This allows finding medications by their active ingredient names
+            # e.g., "Paracetamol" will find medications with "Paracetamol" in active_ingredients
+            active_ingredients = med_data.get("active_ingredients", [])
+            for ingredient in active_ingredients:
+                ingredient_lower = ingredient.lower()
+                # Extract the base ingredient name (before dosage info like "500mg")
+                # e.g., "Paracetamol 500mg" -> "paracetamol"
+                ingredient_base = ingredient_lower.split()[0] if ingredient_lower.split() else ""
+                if name_lower in ingredient_lower or name_lower == ingredient_base:
+                    results.append(Medication(**med_data))
+                    break
         
         logger.debug(f"Search for '{name}' (lang={language}) found {len(results)} results")
         return results

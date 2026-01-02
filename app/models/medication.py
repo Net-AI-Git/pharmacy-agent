@@ -75,6 +75,7 @@ class Medication(BaseModel):
     medication_id: str = Field(description="Unique identifier for the medication")
     name_he: str = Field(description="Name of the medication in Hebrew")
     name_en: str = Field(description="Name of the medication in English")
+    brand_names: List[str] = Field(default_factory=list, description="Alternative brand names or common names for the medication (optional)")
     active_ingredients: List[str] = Field(description="List of active ingredients in the medication (required field)")
     dosage_forms: List[str] = Field(description="Available dosage forms (e.g., Tablets, Capsules, Syrup)")
     dosage_instructions: str = Field(description="Detailed dosage instructions including amount and frequency (required field)")
