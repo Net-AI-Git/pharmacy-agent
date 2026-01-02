@@ -1,0 +1,14 @@
+{
+  "test_name": "stock_check_hebrew",
+  "description": "בדיקת מלאי בעברית",
+  "input": {
+    "user_message": "יש לכם אקמול במלאי?",
+    "conversation_history": null
+  },
+  "parameters": {
+    "model": "gpt-5",
+    "seed": 42,
+    "temperature": 0
+  }
+}
+

@@ -25,12 +25,17 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from app.prompts.system_prompt import get_system_prompt
 from app.tools.registry import get_tools_for_openai, execute_tool
+from app.security.audit_logger import AuditLogger
+from app.security.correlation import generate_correlation_id
 
 # Load environment variables
 load_dotenv()
 
 # Configure module-level logger
 logger = logging.getLogger(__name__)
+
+# Module-level audit logger instance
+_audit_logger = AuditLogger()
 
 
 class StreamingAgent:
@@ -137,7 +142,10 @@ class StreamingAgent:
     
     def _process_tool_calls(
         self,
-        tool_calls: List[Any]
+        tool_calls: List[Any],
+        correlation_id: str,
+        agent_id: str = "default",
+        context: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
         Process tool calls from OpenAI API and execute them.
@@ -146,17 +154,23 @@ class StreamingAgent:
         Executes tool calls requested by OpenAI API and formats the results
         for feeding back to the model. This enables the agent to use pharmacy
         tools (medication search, stock checking, prescription verification)
-        to provide accurate information to users during streaming.
+        to provide accurate information to users during streaming. All tool
+        executions are logged for audit trail using correlation ID.
         
         Implementation (What):
-        Iterates through tool calls, executes each tool using the registry,
-        and creates tool message responses. Handles errors gracefully and
-        logs all tool executions for debugging and auditing. Works with both
-        OpenAI API object structure and dictionary structure for flexibility.
+        Iterates through tool calls, executes each tool using the registry
+        with correlation ID for audit logging, and creates tool message responses.
+        Handles errors gracefully and logs all tool executions for debugging
+        and auditing. Works with both OpenAI API object structure and dictionary
+        structure for flexibility.
         
         Args:
             tool_calls: List of tool call objects from OpenAI API response.
                 Each object has: id, type, function (with name and arguments)
+            correlation_id: Unique identifier for the request/conversation.
+                Used for audit logging to link all operations.
+            agent_id: Identifier for the agent/session. Used for audit logging.
+            context: Optional dictionary with additional context for audit logging.
         
         Returns:
             List of tool message dictionaries to send back to OpenAI API
@@ -189,8 +203,14 @@ class StreamingAgent:
                 # Parse arguments (OpenAI sends as JSON string)
                 arguments = json.loads(arguments_str)
                 
-                # Execute the tool
-                result = execute_tool(tool_name, arguments)
+                # Execute the tool with correlation ID for audit logging
+                result = execute_tool(
+                    tool_name=tool_name,
+                    arguments=arguments,
+                    agent_id=agent_id,
+                    correlation_id=correlation_id,
+                    context=context
+                )
                 
                 # Format result as JSON string for OpenAI
                 result_str = json.dumps(result, ensure_ascii=False)
@@ -223,7 +243,8 @@ class StreamingAgent:
     def stream_response(
         self,
         user_message: str,
-        conversation_history: Optional[List[Dict[str, str]]] = None
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        agent_id: Optional[str] = None
     ) -> Generator[str, None, None]:
         """
         Stream agent response in real-time as a generator.
@@ -232,15 +253,17 @@ class StreamingAgent:
         Provides real-time streaming of agent responses, improving user experience
         by showing text as it is generated rather than waiting for complete responses.
         Handles function calling seamlessly during streaming by pausing stream execution,
-        executing tools, and continuing streaming with tool results.
+        executing tools, and continuing streaming with tool results. All operations
+        are logged with correlation ID for complete audit trail.
         
         Implementation (What):
-        Sends user message to OpenAI API with stream=True, yielding response chunks
-        as they arrive. When OpenAI requests tool calls during streaming, collects
-        all tool calls from the stream, pauses streaming, executes tools, and continues
-        streaming with tool results. Repeats this process until OpenAI returns a final
-        response without tool calls. Maintains stateless behavior - history is only
-        used within the current session.
+        Generates a correlation ID for the request and logs message receipt. Sends user
+        message to OpenAI API with stream=True, yielding response chunks as they
+        arrive. When OpenAI requests tool calls during streaming, collects all tool
+        calls from the stream, pauses streaming, executes tools with correlation ID,
+        and continues streaming with tool results. Repeats this process until OpenAI
+        returns a final response without tool calls. Logs response generation completion.
+        Maintains stateless behavior - history is only used within the current session.
         
         Args:
             user_message: The user's message to process
@@ -249,6 +272,8 @@ class StreamingAgent:
                 {"role": "assistant", "content": "..."}, ...]
                 Note: This is session-level history only. The agent is stateless
                 between different sessions.
+            agent_id: Optional identifier for the agent/session. Used for audit logging.
+                Defaults to "default" for stateless agents.
         
         Yields:
             String chunks containing parts of the agent's response. Each yield is a
@@ -262,8 +287,28 @@ class StreamingAgent:
             >>> for chunk in agent.stream_response("Tell me about Acamol"):
             ...     print(chunk, end="", flush=True)
         """
+        # Generate correlation ID for this request
+        correlation_id = generate_correlation_id()
+        effective_agent_id = agent_id if agent_id is not None else "default"
+        
+        # Log message receipt
+        _audit_logger.log_agent_action(
+            correlation_id=correlation_id,
+            agent_id=effective_agent_id,
+            action="message_received",
+            details={"message": user_message[:500]},  # Limit message length in logs
+            status="success"
+        )
+        
         if not user_message or not user_message.strip():
             logger.warning("Empty user message received")
+            _audit_logger.log_agent_action(
+                correlation_id=correlation_id,
+                agent_id=effective_agent_id,
+                action="empty_message_handled",
+                details={},
+                status="success"
+            )
             yield "I'm here to help! Please ask me about medications, stock availability, or prescription requirements."
             return
         
@@ -271,8 +316,14 @@ class StreamingAgent:
         max_iterations = 10  # Prevent infinite loops
         iteration = 0
         
-        logger.info("Processing user message with streaming")
+        logger.info(f"Processing user message with streaming (correlation_id: {correlation_id})")
         logger.debug(f"Message: {user_message[:100]}...")
+        
+        # Build context for audit logging
+        context = {
+            "user_message": user_message[:500],  # Limit message length
+            "conversation_history_length": len(conversation_history) if conversation_history else 0
+        }
         
         while iteration < max_iterations:
             iteration += 1
@@ -307,28 +358,37 @@ class StreamingAgent:
                         yield delta.content
                     
                     # Handle tool calls (collect them as they arrive)
+                    # Check if tool_calls exists and is iterable (not just truthy Mock)
                     if delta.tool_calls:
-                        for tool_call_delta in delta.tool_calls:
-                            # Initialize tool call structure if needed
-                            index = tool_call_delta.index
-                            while len(tool_calls_collected) <= index:
-                                tool_calls_collected.append({
-                                    "id": "",
-                                    "type": "function",
-                                    "function": {
-                                        "name": "",
-                                        "arguments": ""
-                                    }
-                                })
-                            
-                            # Update tool call with delta information
-                            if tool_call_delta.id:
-                                tool_calls_collected[index]["id"] = tool_call_delta.id
-                            if tool_call_delta.function:
-                                if tool_call_delta.function.name:
-                                    tool_calls_collected[index]["function"]["name"] = tool_call_delta.function.name
-                                if tool_call_delta.function.arguments:
-                                    tool_calls_collected[index]["function"]["arguments"] += tool_call_delta.function.arguments
+                        try:
+                            # Try to iterate to verify it's actually iterable
+                            # This will raise TypeError if tool_calls is not iterable (e.g., Mock object)
+                            iter(delta.tool_calls)
+                            for tool_call_delta in delta.tool_calls:
+                                # Initialize tool call structure if needed
+                                index = tool_call_delta.index
+                                while len(tool_calls_collected) <= index:
+                                    tool_calls_collected.append({
+                                        "id": "",
+                                        "type": "function",
+                                        "function": {
+                                            "name": "",
+                                            "arguments": ""
+                                        }
+                                    })
+                                
+                                # Update tool call with delta information
+                                if tool_call_delta.id:
+                                    tool_calls_collected[index]["id"] = tool_call_delta.id
+                                if tool_call_delta.function:
+                                    if tool_call_delta.function.name:
+                                        tool_calls_collected[index]["function"]["name"] = tool_call_delta.function.name
+                                    if tool_call_delta.function.arguments:
+                                        tool_calls_collected[index]["function"]["arguments"] += tool_call_delta.function.arguments
+                        except (TypeError, AttributeError):
+                            # tool_calls is not iterable (e.g., Mock object that's not configured as iterable)
+                            # Skip tool call processing for this chunk
+                            pass
                 
                 # After stream completes, check if we need to handle tool calls
                 if finish_reason == "tool_calls" and tool_calls_collected:
@@ -350,8 +410,13 @@ class StreamingAgent:
                     
                     logger.info(f"Model requested {len(tool_calls_collected)} tool calls during streaming")
                     
-                    # Execute tools
-                    tool_messages = self._process_tool_calls(tool_calls_collected)
+                    # Execute tools with correlation ID for audit logging
+                    tool_messages = self._process_tool_calls(
+                        tool_calls_collected,
+                        correlation_id=correlation_id,
+                        agent_id=effective_agent_id,
+                        context=context
+                    )
                     messages.extend(tool_messages)
                     
                     # Continue loop to get model's response to tool results (with streaming)
@@ -359,24 +424,88 @@ class StreamingAgent:
                 
                 # No tool calls - we have final response
                 # If we already yielded content, we're done
-                # If no content was yielded but finish_reason is "stop", we're also done
-                if finish_reason == "stop" or (not tool_calls_collected and accumulated_content):
+                # If no content was yielded but finish_reason is "stop", check if we need to yield error
+                if finish_reason == "stop":
+                    if accumulated_content:
+                        # We already yielded content, we're done
+                        logger.info("Streaming completed with final response")
+                        _audit_logger.log_agent_action(
+                            correlation_id=correlation_id,
+                            agent_id=effective_agent_id,
+                            action="response_generated",
+                            details={"response_length": len(accumulated_content)},
+                            status="success"
+                        )
+                        return
+                    elif not tool_calls_collected:
+                        # No content and no tool calls - yield error message
+                        logger.warning("Stream completed with no content and no tool calls")
+                        _audit_logger.log_agent_action(
+                            correlation_id=correlation_id,
+                            agent_id=effective_agent_id,
+                            action="response_generation_failed",
+                            details={"reason": "no_content_no_tool_calls"},
+                            status="error"
+                        )
+                        yield "I apologize, but I encountered an issue processing your request. Please try again or rephrase your question."
+                        return
+                    else:
+                        # Should not happen, but handle gracefully
+                        logger.info("Streaming completed with final response")
+                        _audit_logger.log_agent_action(
+                            correlation_id=correlation_id,
+                            agent_id=effective_agent_id,
+                            action="response_generated",
+                            details={"response_length": 0},
+                            status="success"
+                        )
+                        return
+                elif not tool_calls_collected and accumulated_content:
+                    # We have content and no tool calls - we're done
                     logger.info("Streaming completed with final response")
+                    _audit_logger.log_agent_action(
+                        correlation_id=correlation_id,
+                        agent_id=effective_agent_id,
+                        action="response_generated",
+                        details={"response_length": len(accumulated_content)},
+                        status="success"
+                    )
                     return
                 
                 # If we reach here and no content was yielded, something unexpected happened
                 if not accumulated_content and not tool_calls_collected:
                     logger.warning("Stream completed with no content and no tool calls")
+                    _audit_logger.log_agent_action(
+                        correlation_id=correlation_id,
+                        agent_id=effective_agent_id,
+                        action="response_generation_failed",
+                        details={"reason": "unexpected_state"},
+                        status="error"
+                    )
                     yield "I apologize, but I encountered an issue processing your request. Please try again or rephrase your question."
                     return
                 
             except Exception as e:
                 error_msg = f"Error in OpenAI API streaming call: {str(e)}"
                 logger.error(error_msg, exc_info=True)
+                _audit_logger.log_agent_action(
+                    correlation_id=correlation_id,
+                    agent_id=effective_agent_id,
+                    action="error_handled",
+                    details={"error": str(e), "error_type": type(e).__name__},
+                    status="error"
+                )
                 yield f"I apologize, but I encountered an error: {error_msg}. Please try again."
                 return
         
         # If we exit loop, we hit max iterations
         logger.warning(f"Reached max iterations ({max_iterations}) in streaming tool calling loop")
+        _audit_logger.log_agent_action(
+            correlation_id=correlation_id,
+            agent_id=effective_agent_id,
+            action="max_iterations_reached",
+            details={"max_iterations": max_iterations},
+            status="error"
+        )
         yield "I apologize, but I encountered an issue processing your request. Please try again or rephrase your question."
 

@@ -442,7 +442,31 @@ All tools follow consistent error handling:
 
 ## Integration with OpenAI
 
-### Registering Tools
+### Using StreamingAgent
+
+The recommended way to use tools is through the `StreamingAgent` class, which handles tool calling automatically:
+
+```python
+from app.agent import StreamingAgent
+
+# Initialize the agent (automatically loads tools)
+agent = StreamingAgent(model="gpt-5")
+
+# Stream response - agent will call tools automatically when needed
+user_message = "Tell me about Acamol and check if it's in stock"
+for chunk in agent.stream_response(user_message):
+    print(chunk, end="", flush=True)
+```
+
+The `StreamingAgent` automatically:
+- Registers all available tools with OpenAI
+- Handles tool calls during streaming
+- Executes tools and feeds results back to the model
+- Continues streaming with tool results
+
+### Registering Tools Manually
+
+If you need to register tools manually (for custom implementations):
 
 ```python
 from app.tools.registry import get_tools_for_openai
@@ -454,11 +478,12 @@ tools = get_tools_for_openai()
 response = client.chat.completions.create(
     model="gpt-5",
     messages=[...],
-    tools=tools
+    tools=tools,
+    stream=True  # Enable streaming
 )
 ```
 
-### Executing Tool Calls
+### Executing Tool Calls Manually
 
 ```python
 from app.tools.registry import execute_tool

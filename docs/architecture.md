@@ -15,7 +15,7 @@ The Pharmacy AI Agent is a Python-based application that provides an AI-powered 
          │
 ┌────────▼────────┐
 │  Agent Layer    │  OpenAI API Integration
-│  (agent.py)     │  Function Calling
+│  (streaming.py) │  Function Calling & Streaming
 └────────┬────────┘
          │
 ┌────────▼────────┐
@@ -88,17 +88,18 @@ Implements business logic functions that can be called by the AI agent through O
 ### 4. Agent Layer (`app/agent/`)
 
 **Purpose (Why):**
-Integrates with OpenAI API to provide conversational AI capabilities. Handles function calling, streaming, and message processing.
+Integrates with OpenAI API to provide conversational AI capabilities with real-time text streaming. Handles function calling, streaming, and message processing. The agent is stateless and supports both Hebrew and English as required by the project specifications.
 
 **Components:**
-- `agent.py`: Main agent class (to be implemented)
-- `streaming.py`: Streaming agent for real-time responses (to be implemented)
+- `streaming.py`: StreamingAgent class for real-time streaming responses
+- `__init__.py`: Module exports for agent usage
 
 **Key Features:**
 - Stateless design (no state between conversations)
-- Function calling support
-- Streaming responses
+- Real-time text streaming (required by project specifications)
+- Function calling support with tool integration
 - Bilingual support (Hebrew/English)
+- Seamless tool call handling during streaming
 
 ### 5. UI Layer (`app/main.py`)
 
@@ -178,7 +179,8 @@ Wond/
 │   ├── __init__.py
 │   ├── main.py                 # Application entry point
 │   ├── agent/                  # Agent implementation
-│   │   └── __init__.py
+│   │   ├── __init__.py
+│   │   └── streaming.py        # StreamingAgent class
 │   ├── database/               # Database management
 │   │   ├── __init__.py
 │   │   └── db.py              # DatabaseManager

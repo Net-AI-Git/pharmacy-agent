@@ -15,13 +15,22 @@ correct Python function.
 
 import inspect
 import logging
-from typing import Dict, Any, List, Callable
+from typing import Dict, Any, List, Callable, Optional
 from app.tools.medication_tools import get_medication_by_name
 from app.tools.inventory_tools import check_stock_availability
 from app.tools.prescription_tools import check_prescription_requirement
+from app.security.rate_limiter import RateLimiter
+from app.security.audit_logger import AuditLogger
+from app.security.correlation import generate_correlation_id
 
 # Configure module-level logger
 logger = logging.getLogger(__name__)
+
+# Module-level rate limiter instance
+_rate_limiter = RateLimiter()
+
+# Module-level audit logger instance
+_audit_logger = AuditLogger()
 
 # Registry mapping tool names to their Python functions
 _TOOL_FUNCTIONS: Dict[str, Callable] = {
@@ -159,37 +168,95 @@ def get_tools_for_openai() -> List[Dict[str, Any]]:
     ]
 
 
-def execute_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+def execute_tool(
+    tool_name: str,
+    arguments: Dict[str, Any],
+    agent_id: Optional[str] = None,
+    correlation_id: Optional[str] = None,
+    context: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
     Execute a tool by name with given arguments.
     
     Purpose (Why):
     Routes tool calls from OpenAI API to the correct Python function. When OpenAI
     decides to call a tool, it sends the tool name and arguments, and this function
-    executes the corresponding Python function.
+    executes the corresponding Python function. Includes rate limiting to prevent
+    resource exhaustion and infinite loops. Provides comprehensive auditing for
+    complete traceability of tool executions.
     
     Implementation (What):
-    Looks up the tool function in the registry, calls it with the provided arguments,
-    and returns the result. Handles errors gracefully.
+    First checks rate limits to ensure the tool call is allowed. If rate limit is
+    exceeded, returns an error response instead of executing the tool. If allowed,
+    generates or uses provided correlation ID for audit logging, logs tool call start,
+    looks up the tool function in the registry, calls it with the provided arguments,
+    records the call for rate limit tracking, logs tool call completion, and returns
+    the result. Handles errors gracefully and provides clear error messages for rate
+    limit violations. All operations are logged for audit trail.
     
     Args:
         tool_name: Name of the tool to execute (must match a key in _TOOL_FUNCTIONS)
         arguments: Dictionary of arguments to pass to the tool function
+        agent_id: Optional identifier for the agent/session making the call.
+            Used for rate limit tracking and audit logging. Defaults to "default" for
+            stateless agents. Can be session ID or user ID in future implementations.
+        correlation_id: Optional correlation ID for request tracking. If not provided,
+            generates a new one. Used to link all operations in a single request/conversation.
+        context: Optional dictionary with additional context information for audit logging.
+            Can include user message, conversation history, or other relevant context.
     
     Returns:
-        Dictionary containing the tool execution result
+        Dictionary containing the tool execution result. If rate limit is exceeded,
+        returns error dictionary with "error" and "success" fields.
     
     Raises:
         ValueError: If tool_name is not found in registry
-        Exception: Any exception raised by the tool function
+        Exception: Any exception raised by the tool function (except rate limit errors)
+    
+    Example:
+        >>> result = execute_tool("get_medication_by_name", {"name": "Acamol"})
+        >>> if not result.get("success", True):
+        ...     print(f"Error: {result.get('error')}")
     """
     if tool_name not in _TOOL_FUNCTIONS:
         error_msg = f"Tool '{tool_name}' not found in registry. Available tools: {list(_TOOL_FUNCTIONS.keys())}"
         logger.error(error_msg)
         raise ValueError(error_msg)
     
+    # Use default agent_id if not provided (for stateless agents)
+    effective_agent_id = agent_id if agent_id is not None else "default"
+    
+    # Generate or use provided correlation ID
+    effective_correlation_id = correlation_id if correlation_id is not None else generate_correlation_id()
+    
+    # Check rate limit before executing
+    allowed, error_message = _rate_limiter.check_rate_limit(tool_name, effective_agent_id)
+    if not allowed:
+        error_result = {
+            "error": error_message,
+            "success": False,
+            "tool_name": tool_name,
+            "rate_limit_exceeded": True
+        }
+        logger.warning(
+            f"Rate limit exceeded for tool '{tool_name}' by agent '{effective_agent_id}': {error_message}"
+        )
+        
+        # Log rate limit error to audit log
+        _audit_logger.log_tool_call(
+            correlation_id=effective_correlation_id,
+            tool_name=tool_name,
+            agent_id=effective_agent_id,
+            arguments=arguments,
+            result=error_result,
+            context=context,
+            status="error"
+        )
+        
+        return error_result
+    
     tool_function = _TOOL_FUNCTIONS[tool_name]
-    logger.info(f"Executing tool: {tool_name} with arguments: {arguments}")
+    logger.info(f"Executing tool: {tool_name} with arguments: {arguments} (agent_id: {effective_agent_id})")
     
     # Filter arguments to only include parameters that the function accepts
     # This prevents TypeError when extra arguments are provided
@@ -203,10 +270,44 @@ def execute_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             filtered_out = set(arguments.keys()) - set(filtered_arguments.keys())
             logger.warning(f"Filtered out unexpected arguments for {tool_name}: {filtered_out}")
         
+        # Execute the tool
         result = tool_function(**filtered_arguments)
+        
+        # Record the call for rate limit tracking (after successful execution)
+        _rate_limiter.record_call(tool_name, effective_agent_id)
+        
+        # Log successful tool execution to audit log
+        _audit_logger.log_tool_call(
+            correlation_id=effective_correlation_id,
+            tool_name=tool_name,
+            agent_id=effective_agent_id,
+            arguments=filtered_arguments,
+            result=result,
+            context=context,
+            status="success"
+        )
+        
         logger.debug(f"Tool {tool_name} executed successfully")
         return result
     except Exception as e:
+        error_result = {
+            "error": str(e),
+            "success": False,
+            "tool_name": tool_name
+        }
+        
         logger.error(f"Error executing tool {tool_name}: {str(e)}", exc_info=True)
+        
+        # Log error to audit log
+        _audit_logger.log_tool_call(
+            correlation_id=effective_correlation_id,
+            tool_name=tool_name,
+            agent_id=effective_agent_id,
+            arguments=filtered_arguments if 'filtered_arguments' in locals() else arguments,
+            result=error_result,
+            context=context,
+            status="error"
+        )
+        
         raise
 

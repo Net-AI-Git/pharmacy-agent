@@ -190,6 +190,55 @@ Agent: [Searches] → [Retrieves details] → [Checks prescription] →
        זמין במלאי: 150 יחידות."
 ```
 
+## Agent Usage
+
+### Using StreamingAgent
+
+The application uses `StreamingAgent` for real-time text streaming responses. Here's how to use it:
+
+```python
+from app.agent import StreamingAgent
+
+# Initialize the agent
+agent = StreamingAgent(model="gpt-5")
+
+# Stream response in real-time
+user_message = "Tell me about Acamol"
+for chunk in agent.stream_response(user_message):
+    print(chunk, end="", flush=True)
+```
+
+### StreamingAgent with Conversation History
+
+```python
+from app.agent import StreamingAgent
+from typing import List, Dict
+
+# Initialize the agent
+agent = StreamingAgent()
+
+# Maintain conversation history within a session
+conversation_history: List[Dict[str, str]] = []
+
+# First message
+user_message_1 = "What is Acamol?"
+response_1 = ""
+for chunk in agent.stream_response(user_message_1):
+    response_1 += chunk
+    print(chunk, end="", flush=True)
+
+# Add to history
+conversation_history.append({"role": "user", "content": user_message_1})
+conversation_history.append({"role": "assistant", "content": response_1})
+
+# Follow-up message with context
+user_message_2 = "Does it require a prescription?"
+for chunk in agent.stream_response(user_message_2, conversation_history):
+    print(chunk, end="", flush=True)
+```
+
+**Note:** The agent is stateless - conversation history is only maintained within a single session. Each new session starts fresh.
+
 ## Tool Usage
 
 ### Direct Tool Execution

@@ -333,4 +333,141 @@ class TestSystemPrompt:
         assert prompt1 == prompt2, "Expected same prompt on second call"
         assert prompt2 == prompt3, "Expected same prompt on third call"
         assert prompt1 == prompt3, "Expected same prompt on first and third call"
+    
+    def test_system_prompt_contains_multi_step_flow_examples(self):
+        """
+        Test that system prompt contains multi-step flow examples.
+        
+        Arrange: No setup needed
+        Act: Call get_system_prompt
+        Assert: Prompt contains examples of multi-step flows
+        """
+        # Arrange
+        # No setup needed
+        
+        # Act
+        prompt = get_system_prompt()
+        
+        # Assert
+        assert ("flow" in prompt.lower() or "step" in prompt.lower() or "example" in prompt.lower()), \
+            f"Expected prompt to contain flow examples, got: {prompt[:300]}..."
+        assert ("stock" in prompt.lower() or "availability" in prompt.lower() or "prescription" in prompt.lower()), \
+            f"Expected prompt to contain flow examples with tools, got: {prompt[:300]}..."
+    
+    def test_system_prompt_contains_error_handling_instructions(self):
+        """
+        Test that system prompt contains error handling instructions.
+        
+        Arrange: No setup needed
+        Act: Call get_system_prompt
+        Assert: Prompt contains instructions for handling errors
+        """
+        # Arrange
+        # No setup needed
+        
+        # Act
+        prompt = get_system_prompt()
+        
+        # Assert
+        assert ("error" in prompt.lower() or "fail" in prompt.lower() or "not found" in prompt.lower() or \
+                "suggest" in prompt.lower() or "alternative" in prompt.lower()), \
+            f"Expected prompt to contain error handling instructions, got: {prompt[:300]}..."
+    
+    def test_system_prompt_contains_response_guidelines(self):
+        """
+        Test that system prompt contains response guidelines.
+        
+        Arrange: No setup needed
+        Act: Call get_system_prompt
+        Assert: Prompt contains guidelines for responses
+        """
+        # Arrange
+        # No setup needed
+        
+        # Act
+        prompt = get_system_prompt()
+        
+        # Assert
+        assert ("guideline" in prompt.lower() or "response" in prompt.lower() or "clear" in prompt.lower() or \
+                "helpful" in prompt.lower() or "professional" in prompt.lower()), \
+            f"Expected prompt to contain response guidelines, got: {prompt[:300]}..."
+    
+    def test_system_prompt_contains_tool_specific_instructions(self):
+        """
+        Test that system prompt contains specific instructions for each tool.
+        
+        Arrange: No setup needed
+        Act: Call get_system_prompt
+        Assert: Prompt contains instructions for get_medication_by_name, check_stock_availability, check_prescription_requirement
+        """
+        # Arrange
+        # No setup needed
+        
+        # Act
+        prompt = get_system_prompt()
+        
+        # Assert
+        assert "get_medication_by_name" in prompt.lower(), \
+            f"Expected prompt to contain get_medication_by_name instructions, got: {prompt[:300]}..."
+        assert "check_stock" in prompt.lower() or "stock_availability" in prompt.lower(), \
+            f"Expected prompt to contain check_stock_availability instructions, got: {prompt[:300]}..."
+        assert "check_prescription" in prompt.lower() or "prescription_requirement" in prompt.lower(), \
+            f"Expected prompt to contain check_prescription_requirement instructions, got: {prompt[:300]}..."
+    
+    def test_system_prompt_contains_language_switching_instructions(self):
+        """
+        Test that system prompt contains instructions for language switching.
+        
+        Arrange: No setup needed
+        Act: Call get_system_prompt
+        Assert: Prompt contains instructions for handling language switches
+        """
+        # Arrange
+        # No setup needed
+        
+        # Act
+        prompt = get_system_prompt()
+        
+        # Assert
+        assert ("switch" in prompt.lower() or "language" in prompt.lower() or "hebrew" in prompt.lower() or \
+                "english" in prompt.lower() or "he" in prompt.lower() or "en" in prompt.lower()), \
+            f"Expected prompt to contain language switching instructions, got: {prompt[:300]}..."
+    
+    def test_system_prompt_contains_dosage_forms_requirement(self):
+        """
+        Test that system prompt contains requirement to describe dosage forms.
+        
+        Arrange: No setup needed
+        Act: Call get_system_prompt
+        Assert: Prompt contains instruction to describe dosage forms
+        """
+        # Arrange
+        # No setup needed
+        
+        # Act
+        prompt = get_system_prompt()
+        
+        # Assert
+        assert ("dosage form" in prompt.lower() or "tablet" in prompt.lower() or "capsule" in prompt.lower() or \
+                "syrup" in prompt.lower() or "form" in prompt.lower()), \
+            f"Expected prompt to contain dosage forms requirement, got: {prompt[:300]}..."
+    
+    def test_system_prompt_contains_timing_instructions_requirement(self):
+        """
+        Test that system prompt contains requirement to explain timing (when to take medication).
+        
+        Arrange: No setup needed
+        Act: Call get_system_prompt
+        Assert: Prompt contains instruction to explain timing
+        """
+        # Arrange
+        # No setup needed
+        
+        # Act
+        prompt = get_system_prompt()
+        
+        # Assert
+        assert ("timing" in prompt.lower() or "when" in prompt.lower() or "food" in prompt.lower() or \
+                "meal" in prompt.lower() or "before" in prompt.lower() or "after" in prompt.lower()), \
+            f"Expected prompt to contain timing instructions requirement, got: {prompt[:300]}..."
 

@@ -36,7 +36,7 @@ def main():
         "-v",  # Verbose output
         "--tb=short",  # Short traceback format
         "--color=yes",  # Colored output
-        "-ra",  # Show all test outcomes (pass, fail, skip, etc.)
+        "-rf",  # Show only failed tests (removed -ra which shows all)
     ]
     
     print("=" * 60)
@@ -51,9 +51,9 @@ def main():
     print()
     print("=" * 60)
     if result.returncode == 0:
-        print("✅ All tests passed!")
+        print("All tests passed!")
     else:
-        print("❌ Some tests failed!")
+        print("Some tests failed!")
     print("=" * 60)
     
     sys.exit(result.returncode)
