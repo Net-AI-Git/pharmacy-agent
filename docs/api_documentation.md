@@ -452,7 +452,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 tools = get_tools_for_openai()
 
 response = client.chat.completions.create(
-    model="gpt-4",
+    model="gpt-5",
     messages=[...],
     tools=tools
 )

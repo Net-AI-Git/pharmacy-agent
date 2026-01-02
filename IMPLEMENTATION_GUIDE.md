@@ -24,6 +24,7 @@
    - `app/database/`
    - `app/models/`
    - `app/prompts/`
+   - `app/security/` (לתתי-משימה 4.5)
    - `data/`
 
 **איך לעשות:**
@@ -42,7 +43,8 @@
   │   ├── tools/
   │   ├── database/
   │   ├── models/
-  │   └── prompts/
+  │   ├── prompts/
+  │   └── security/ (לתתי-משימה 4.5)
   └── data/
   ```
 
@@ -58,6 +60,7 @@
 - `app/database/__init__.py`
 - `app/models/__init__.py`
 - `app/prompts/__init__.py`
+- `app/security/__init__.py` (לתתי-משימה 4.5)
 
 **איך לעשות:**
 - צור קובץ חדש בשם `__init__.py` בכל תיקייה
@@ -65,7 +68,7 @@
 
 **איך לבדוק:**
 - פתח כל תיקייה ווודא שיש קובץ `__init__.py`
-- סך הכל 6 קבצים
+- סך הכל 7 קבצים (כולל security)
 
 ---
 
@@ -147,7 +150,7 @@ pip install -r requirements.txt
 ### תת-משימה 1.6: יצירת .env.example
 
 **מה לעשות:**
-צור קובץ `.env.example` עם התוכן:
+צור קובץ `.env.example` עם התוכן הבסיסי (יועדכן בתת-משימה 4.5.6):
 ```
 OPENAI_API_KEY=your_api_key_here
 ```
@@ -156,6 +159,8 @@ OPENAI_API_KEY=your_api_key_here
 - צור קובץ חדש בשם `.env.example`
 - כתוב את התוכן למעלה
 - שמור
+
+**הערה:** קובץ זה יועדכן בתת-משימה 4.5.6 עם משתני סביבה נוספים לאבטחה.
 
 **איך לבדוק:**
 - פתח את הקובץ ווודא שהתוכן נכון
@@ -590,6 +595,293 @@ class User(BaseModel):
 **איך לבדוק:**
 - נסה עם הודעה פשוטה - צריך לראות chunks מגיעים
 - נסה עם הודעה שדורשת tool call - צריך לראות tool call ואז המשך streaming
+
+---
+
+## משימה 4.5: Security, Governance & Observability
+
+**הערה חשובה:** משימה זו מוסיפה יכולות אבטחה וממשל הנדרשות לייצור. חלק מהמשימות הן קריטיות לפני העברה לייצור.
+
+---
+
+### תת-משימה 4.5.1: הגדרת Environment Management (Dev/Prod)
+
+**מה לעשות:**
+הוסף מנגנון להפרדת סביבות - Dev ו-Prod עם כלים שונים לכל סביבה.
+
+**איך לעשות:**
+1. עדכן את `.env.example` להוסיף:
+   ```
+   OPENAI_API_KEY=your_api_key_here
+   ENVIRONMENT=dev
+   ```
+   (ערכים אפשריים: `dev` או `prod`)
+
+2. עדכן את `app/tools/registry.py`:
+   - ייבא `os` ו-`dotenv`
+   - הוסף קריאה ל-`load_dotenv()` בתחילת הקובץ
+   - קרא את `ENVIRONMENT` מ-environment variable (default: "dev")
+   - צור פונקציה `get_dev_tools()` שמחזירה mock tools או כלים מוגבלים
+   - צור פונקציה `get_prod_tools()` שמחזירה כלים אמיתיים עם guardrails
+   - עדכן את `get_tools_for_openai()` להחזיר כלים לפי הסביבה:
+     ```python
+     ENVIRONMENT = os.getenv("ENVIRONMENT", "dev")
+     
+     def get_tools_for_openai() -> List[Dict[str, Any]]:
+         if ENVIRONMENT == "dev":
+             return get_dev_tools()
+         elif ENVIRONMENT == "prod":
+             return get_prod_tools()
+         else:
+             raise ValueError(f"Unknown environment: {ENVIRONMENT}")
+     ```
+
+3. צור קובץ `app/tools/mock_tools.py` עם mock tools לסביבת פיתוח:
+   - Mock versions של כל הכלים
+   - מחזירים נתונים דמה ללא גישה למסד נתונים אמיתי
+   - שימושי לבדיקות ופיתוח
+
+**איך לבדוק:**
+- הגדר `ENVIRONMENT=dev` ב-`.env` - וודא שמחזירים mock tools
+- הגדר `ENVIRONMENT=prod` ב-`.env` - וודא שמחזירים כלים אמיתיים
+- וודא שב-Dev אין גישה למסד נתונים אמיתי
+- וודא שב-Prod הכלים עובדים עם guardrails
+
+---
+
+### תת-משימה 4.5.2: יישום Rate Limiting
+
+**מה לעשות:**
+הוסף rate limiting כדי למנוע לולאות בלתי נשלטות ולהגביל שימוש בכלים.
+
+**איך לעשות:**
+1. צור קובץ `app/security/rate_limiter.py`:
+   - צור class `RateLimiter` עם:
+     - `check_rate_limit(tool_name: str, agent_id: str) -> bool` - בודק אם מותר לקרוא
+     - `record_call(tool_name: str, agent_id: str)` - רושם קריאה
+   - השתמש ב-`collections.defaultdict` ו-`time.time()` למעקב
+   - הגדר limits:
+     - מקסימום X קריאות לכלי לדקה (למשל, 60)
+     - מקסימום Y קריאות לכלי ביום (למשל, 1000)
+     - מקסימום Z קריאות רצופות לאותו כלי (למשל, 10)
+
+2. עדכן את `app/tools/registry.py`:
+   - ייבא את `RateLimiter`
+   - צור instance של `RateLimiter` ברמת מודול
+   - ב-`execute_tool()`, לפני ביצוע:
+     - בדוק rate limit
+     - אם חרג - החזר שגיאה עם הודעה ברורה
+     - אם OK - רשום את הקריאה
+
+3. הוסף configuration ל-`.env.example`:
+   ```
+   RATE_LIMIT_PER_MINUTE=60
+   RATE_LIMIT_PER_DAY=1000
+   RATE_LIMIT_CONSECUTIVE=10
+   ```
+
+**איך לבדוק:**
+- נסה לקרוא לאותו כלי יותר מ-X פעמים בדקה - צריך לקבל שגיאה
+- נסה ליצור לולאה - צריך להיעצר אחרי Z קריאות רצופות
+- וודא שהגבלות עובדות נכון
+- בדוק שההודעות ברורות למשתמש
+
+---
+
+### תת-משימה 4.5.3: יישום Comprehensive Auditing
+
+**מה לעשות:**
+הוסף מערכת auditing מקיפה שמתעדת כל פעולה עם context מלא.
+
+**איך לעשות:**
+1. צור קובץ `app/security/audit_logger.py`:
+   - צור class `AuditLogger` עם:
+     - `log_tool_call(correlation_id: str, tool_name: str, agent_id: str, arguments: dict, result: dict, context: dict)`
+     - `log_agent_action(correlation_id: str, agent_id: str, action: str, details: dict)`
+   - כל log צריך לכלול:
+     - Correlation ID (מזהה ייחודי לכל שיחה/בקשה)
+     - Timestamp
+     - Agent ID
+     - Tool name (אם רלוונטי)
+     - Arguments
+     - Result
+     - Context (מידע נוסף על הבקשה)
+     - Status (success/error)
+
+2. צור קובץ `app/security/correlation.py`:
+   - פונקציה `generate_correlation_id() -> str` - מייצרת UUID ייחודי
+   - שמור correlation ID לכל שיחה
+
+3. עדכן את `app/tools/registry.py`:
+   - ייבא את `AuditLogger` ו-`generate_correlation_id`
+   - ב-`execute_tool()`, לפני ואחרי ביצוע:
+     - צור/קבל correlation ID
+     - רשום את הקריאה עם כל הפרטים
+     - רשום את התוצאה
+
+4. עדכן את `app/agent/agent.py`:
+   - העבר correlation ID לכל קריאת tool
+   - רשום כל פעולה של הסוכן
+
+5. (אופציונלי) הוסף אינטגרציה עם LangSmith:
+   - אם יש `LANGSMITH_API_KEY` ב-`.env`
+   - שלח logs גם ל-LangSmith
+   - או שמור logs לקובץ JSON למטרות ביקורת
+
+**איך לבדוק:**
+- שלח בקשה - וודא שנוצר correlation ID
+- בדוק שכל קריאת tool מתועדת
+- וודא שהתיעוד כולל את כל הפרטים (arguments, result, context)
+- בדוק שניתן לעקוב אחרי flow מלא לפי correlation ID
+- אם יש LangSmith - וודא שהלוגים מגיעים
+
+---
+
+### תת-משימה 4.5.4: יישום Human-in-the-Loop (אופציונלי)
+
+**מה לעשות:**
+הוסף מנגנון לאישור אנושי לפעולות קריטיות (כרגע פחות קריטי כי הכלים read-only, אבל חשוב לעתיד).
+
+**איך לעשות:**
+1. צור קובץ `app/security/approval_manager.py`:
+   - צור class `ApprovalManager` עם:
+     - `requires_approval(tool_name: str) -> bool` - בודק אם כלי דורש אישור
+     - `request_approval(tool_name: str, arguments: dict, context: dict) -> str` - מבקש אישור, מחזיר approval_id
+     - `check_approval(approval_id: str) -> bool` - בודק אם אושר
+   - רשימת כלים שדורשים אישור (למשל, כלים שכותבים/משנים נתונים)
+
+2. עדכן את `app/tools/registry.py`:
+   - ייבא את `ApprovalManager`
+   - ב-`execute_tool()`, לפני ביצוע:
+     - אם הכלי דורש אישור:
+       - עצור את הביצוע
+       - החזר הודעה שמבקשת אישור
+       - שמור את הבקשה למאוחר יותר
+     - אם יש אישור - המשך ביצוע
+
+3. (אופציונלי) הוסף ממשק לאישורים:
+   - דף נפרד ב-Gradio לאישור בקשות
+   - או webhook לקבלת אישורים
+
+**הערה:** כרגע כל הכלים הם read-only, אז זה פחות קריטי. אבל אם יוסיפו כלים שכותבים/משנים נתונים (למשל, עדכון מלאי, יצירת הזמנה), זה יהיה קריטי.
+
+**איך לבדוק:**
+- סמן כלי אחד כ-"דורש אישור"
+- נסה לקרוא לו - צריך לקבל הודעה שמבקשת אישור
+- תן אישור - וודא שהכלי רץ
+- דחה אישור - וודא שהכלי לא רץ
+
+---
+
+### תת-משימה 4.5.5: יישום Sandboxing (אופציונלי)
+
+**מה לעשות:**
+הוסף sandboxing לכלים מסוכנים כדי לבודד ביצוע ולמנוע side effects.
+
+**איך לעשות:**
+1. צור קובץ `app/security/sandbox.py`:
+   - צור class `ToolSandbox` עם:
+     - `execute_sandboxed(tool_name: str, arguments: dict, environment: str) -> dict`
+     - ב-Dev: בודד ביצוע, מחזיר mock responses
+     - ב-Prod: רץ עם guardrails נוספים
+
+2. עדכן את `app/tools/registry.py`:
+   - ייבא את `ToolSandbox`
+   - לכל כלי מסוכן, השתמש ב-sandbox wrapper
+   - ב-Dev: כל הכלים רצים ב-sandbox
+   - ב-Prod: רק כלים מסוכנים רצים ב-sandbox
+
+3. הוסף רשימת כלים מסוכנים:
+   - כלים שכותבים למסד נתונים
+   - כלים שמבצעים פעולות בלתי הפיכות
+   - כלים עם side effects
+
+**איך לבדוק:**
+- ב-Dev: וודא שכל הכלים רצים ב-sandbox ללא side effects
+- ב-Prod: וודא שכלים מסוכנים רצים ב-sandbox
+- בדוק שהבידוד עובד נכון
+- וודא שאין גישה למשאבים חיצוניים ב-Dev
+
+---
+
+### תת-משימה 4.5.6: עדכון .env.example
+
+**מה לעשות:**
+עדכן את `.env.example` לכלול את כל משתני הסביבה החדשים.
+
+**איך לעשות:**
+1. פתח את `.env.example`
+2. הוסף את כל המשתנים החדשים:
+   ```
+   OPENAI_API_KEY=your_api_key_here
+   ENVIRONMENT=dev
+   RATE_LIMIT_PER_MINUTE=60
+   RATE_LIMIT_PER_DAY=1000
+   RATE_LIMIT_CONSECUTIVE=10
+   LANGSMITH_API_KEY=your_langsmith_key_here (optional)
+   ```
+
+**איך לבדוק:**
+- וודא שכל המשתנים מופיעים
+- וודא שיש הערות על משתנים אופציונליים
+- וודא שהערכים ברורים
+
+---
+
+### תת-משימה 4.5.7: יצירת תיקיית security
+
+**מה לעשות:**
+צור תיקייה `app/security/` לכל הקבצים החדשים.
+
+**איך לעשות:**
+1. צור תיקייה `app/security/`
+2. צור קובץ `app/security/__init__.py`
+3. העבר/צור את הקבצים הבאים:
+   - `rate_limiter.py`
+   - `audit_logger.py`
+   - `correlation.py`
+   - `approval_manager.py` (אופציונלי)
+   - `sandbox.py` (אופציונלי)
+
+**איך לבדוק:**
+- וודא שהתיקייה קיימת
+- וודא שכל הקבצים במקום
+- וודא ש-`__init__.py` קיים
+
+---
+
+### תת-משימה 4.5.8: בדיקת כל מנגנוני האבטחה
+
+**מה לעשות:**
+בדוק שכל מנגנוני האבטחה עובדים יחד.
+
+**איך לעשות:**
+1. בדוק Environment Management:
+   - Dev vs Prod
+   - Mock tools vs Real tools
+
+2. בדוק Rate Limiting:
+   - הגבלות לדקה
+   - הגבלות ליום
+   - מניעת לולאות
+
+3. בדוק Auditing:
+   - Correlation IDs
+   - תיעוד מלא
+   - Tracing
+
+4. בדוק Human-in-the-Loop (אם יושם):
+   - אישורים לפעולות קריטיות
+
+5. בדוק Sandboxing (אם יושם):
+   - בידוד ב-Dev
+   - Guardrails ב-Prod
+
+**איך לבדוק:**
+- הרץ את כל הבדיקות
+- וודא שהכל עובד יחד
+- וודא שאין קונפליקטים בין המנגנונים
+- תיעד כל בעיה ותקן
 
 ---
 
