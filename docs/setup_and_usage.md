@@ -63,7 +63,7 @@ Ensure the database file exists at `data/database.json`. The file should contain
 - Medications data
 - Prescriptions data
 
-See `docs/database_structure_design.md` for the expected structure.
+See `docs/database_documentation.md` for the expected structure.
 
 ## Running the Application
 
@@ -83,21 +83,90 @@ The application will start a Gradio web interface. Access it at:
 
 ### Docker Deployment
 
-**Step 1: Build Docker Image**
+#### Prerequisites
+
+1. **Install Docker Desktop**:
+   - Download from: https://www.docker.com/products/docker-desktop
+   - Install and start Docker Desktop
+   - Verify Docker is running (icon should be green)
+
+2. **Prepare .env file**:
+   - Copy `.env.example` to `.env`
+   - Add your `OPENAI_API_KEY`
+
+#### Step 1: Build Docker Image
+
+Build the Docker image from the project root:
 
 ```bash
 docker build -t pharmacy-agent .
 ```
 
-**Step 2: Run Container**
+**Verification:**
+- Ensure build completes successfully
+- No errors during build
+- Image is created (check with `docker images`)
 
+#### Step 2: Run Container
+
+Run the container with one of the following methods:
+
+**Option 1: Using environment variable directly**
 ```bash
 docker run -p 7860:7860 -e OPENAI_API_KEY=your_api_key_here pharmacy-agent
 ```
 
-**Step 3: Access Application**
+**Option 2: Using .env file**
+```bash
+docker run -p 7860:7860 --env-file .env pharmacy-agent
+```
 
-Open browser at `http://localhost:7860`
+**Verification:**
+- Application starts successfully
+- Open browser at `http://localhost:7860`
+- Test functionality:
+  - Streaming responses
+  - Tool calls
+  - All multi-step flows
+
+#### Important Notes
+
+1. **Port 7860**: The application runs on port 7860. If the port is in use, you can change it:
+   ```bash
+   docker run -p 8080:7860 -e OPENAI_API_KEY=your_key pharmacy-agent
+   ```
+   Then access at `http://localhost:8080`
+
+2. **Environment Variables**: If you have additional environment variables (e.g., `ENVIRONMENT`, `RATE_LIMIT_PER_MINUTE`), add them:
+   ```bash
+   docker run -p 7860:7860 -e OPENAI_API_KEY=your_key -e ENVIRONMENT=prod pharmacy-agent
+   ```
+
+3. **Data**: The container includes the `data/` directory with `database.json`, so the application can access the database.
+
+4. **Logs**: To view logs:
+   ```bash
+   docker logs <container_id>
+   ```
+
+#### Troubleshooting Docker Issues
+
+**Docker not recognized:**
+- Ensure Docker Desktop is running
+- Try restarting the terminal
+- Try restarting Docker Desktop
+
+**Port already in use:**
+- Change the port in `docker run` (e.g., `-p 8080:7860`)
+- Or stop the application running on port 7860
+
+**API Key error:**
+- Verify `OPENAI_API_KEY` is passed correctly
+- Check it's valid in `.env` file
+
+**Database error:**
+- Ensure `data/` directory is included in build
+- Verify `database.json` exists
 
 ## Usage
 
@@ -452,7 +521,7 @@ For issues or questions:
 
 1. Review `docs/architecture.md` for system architecture
 2. Read `docs/api_documentation.md` for API details
-3. Check `docs/tools_documentation.md` for tool usage
+3. Check `docs/api_documentation.md` for tool usage and API details
 4. See `docs/models_documentation.md` for data models
 
 

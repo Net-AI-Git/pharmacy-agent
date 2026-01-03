@@ -203,7 +203,7 @@ Wond/
 ├── docs/                       # Documentation
 │   ├── architecture.md
 │   ├── database_schema.json
-│   └── database_structure_design.md
+│   └── database_documentation.md
 ├── tests/                      # Test suite
 ├── Dockerfile
 ├── requirements.txt

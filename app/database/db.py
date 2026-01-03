@@ -11,9 +11,15 @@ from app.models.prescription import Prescription
 logger = logging.getLogger(__name__)
 
 # #region agent log
-DEBUG_LOG_PATH = r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log"
+# Debug log path - only used if the directory exists (for local development)
+# In Docker/production, this will silently fail (no logging to file)
+DEBUG_LOG_PATH = Path(__file__).parent.parent.parent / ".cursor" / "debug.log"
 def _debug_log(location: str, message: str, data: dict = None, hypothesis_id: str = None):
     try:
+        # Only log if the directory exists (local development)
+        log_dir = DEBUG_LOG_PATH.parent
+        if not log_dir.exists():
+            return
         log_entry = {
             "sessionId": "debug-session",
             "runId": "initial",

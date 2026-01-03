@@ -15,10 +15,80 @@ tools = get_tools_for_openai()
 # Returns list of tool definitions for OpenAI API
 ```
 
+### Tool Registry Details
+
+The tool registry (`app/tools/registry.py`) provides two main functions:
+
+#### `get_tools_for_openai() -> List[Dict[str, Any]]`
+
+**Purpose:**
+Returns tool definitions in JSON Schema format that OpenAI API understands. This is what the LLM "sees" - it receives these schemas to understand what tools are available and when to use them.
+
+**Returns:**
+- `List[Dict[str, Any]]`: List of tool definitions in OpenAI format
+- Each tool definition contains:
+  - `type`: "function" (OpenAI function calling type)
+  - `function.name`: The tool name
+  - `function.description`: What the tool does (from docstring)
+  - `function.parameters`: JSON Schema describing the parameters
+
+**Example:**
+```python
+from app.tools.registry import get_tools_for_openai
+
+tools = get_tools_for_openai()
+# Returns list of tool definitions for OpenAI API
+```
+
+#### `execute_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]`
+
+**Purpose:**
+Routes tool calls from OpenAI API to the correct Python function. When OpenAI decides to call a tool, it sends the tool name and arguments, and this function executes the corresponding Python function.
+
+**Parameters:**
+- `tool_name` (str): Name of the tool to execute (must match a key in _TOOL_FUNCTIONS)
+- `arguments` (Dict[str, Any]): Dictionary of arguments to pass to the tool function
+
+**Returns:**
+- `Dict[str, Any]`: Dictionary containing the tool execution result
+
+**Raises:**
+- `ValueError`: If tool_name is not found in registry
+- `Exception`: Any exception raised by the tool function
+
+**Example:**
+```python
+from app.tools.registry import execute_tool
+
+# Execute medication search
+result = execute_tool(
+    "get_medication_by_name",
+    {"name": "Acamol", "language": "he"}
+)
+
+# Execute stock check
+result = execute_tool(
+    "check_stock_availability",
+    {"medication_id": "med_001", "quantity": 10}
+)
+```
+
+**Registered Tools:**
+- `"get_medication_by_name"`: Maps to `get_medication_by_name()` function
+- `"check_stock_availability"`: Maps to `check_stock_availability()` function
+- `"check_prescription_requirement"`: Maps to `check_prescription_requirement()` function
+- `"get_user_by_name_or_email"`: Maps to `get_user_by_name_or_email()` function
+- `"get_user_prescriptions"`: Maps to `get_user_prescriptions()` function
+- `"check_user_prescription_for_medication"`: Maps to `check_user_prescription_for_medication()` function
+
 ## Tool 1: get_medication_by_name
 
-### Purpose
-Search for a medication by name with fuzzy matching support. Supports both Hebrew and English names, handles partial matches, and provides helpful suggestions when no exact match is found.
+### Name and Purpose
+
+**Tool Name:** `get_medication_by_name`
+
+**Purpose:**
+Searches for a medication in the database by name with fuzzy matching support. This tool enables the AI agent to find medications when users provide medication names in natural language. It supports both Hebrew and English names, handles partial matches (fuzzy matching), and provides helpful suggestions when no exact match is found. Returns basic medication information including active ingredients, dosage instructions, and description. Does NOT return stock availability or prescription requirements - use check_stock_availability and check_prescription_requirement for those.
 
 ### OpenAI Function Schema
 
@@ -47,34 +117,164 @@ Search for a medication by name with fuzzy matching support. Supports both Hebre
 }
 ```
 
-### Input Parameters
+### Input Schema
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `name` | string | Yes | The medication name to search for (case-insensitive, supports partial matches) |
-| `language` | string ("he" \| "en") | No | Optional language filter. If not provided, searches both languages |
+The tool accepts the following parameters in JSON format:
 
-### Success Response
-
-**Status:** 200 OK
-
-**Schema:**
 ```json
 {
-  "medication_id": "string",
-  "name_he": "string",
-  "name_en": "string",
-  "active_ingredients": ["string"],
-  "dosage_forms": ["string"],
-  "dosage_instructions": "string",
-  "usage_instructions": "string",
-  "description": "string"
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The medication name to search for. Supports partial matches and fuzzy matching. Case-insensitive. Examples: 'Acamol', 'paracet', 'אקמול'",
+      "required": true
+    },
+    "language": {
+      "type": "string",
+      "enum": ["he", "en"],
+      "description": "Optional language filter: 'he' for Hebrew, 'en' for English. If not provided, searches both languages. Use 'he' when the user asks in Hebrew, 'en' when in English.",
+      "required": false
+    }
+  },
+  "required": ["name"]
 }
 ```
 
-**Note:** This tool does NOT return `requires_prescription`, `available`, or `quantity_in_stock`. For prescription information, use `check_prescription_requirement(medication_id)`. For stock information, use `check_stock_availability(medication_id)`.
+### Parameter Details
 
-**Example:**
+- **name** (string, required):
+  - The medication name to search for
+  - Supports partial matches and fuzzy matching
+  - Case-insensitive
+  - Examples: "Acamol", "paracet", "אקמול", "Acetaminophen"
+
+- **language** (string, optional):
+  - Language filter to narrow search results
+  - Valid values: "he" (Hebrew), "en" (English)
+  - If not provided, searches both languages
+  - Default: `null` (searches both languages)
+
+### Output Schema
+
+The tool returns a dictionary containing either a success result or an error result.
+
+### Success Response Schema
+
+When medication is found, returns `MedicationSearchResult`:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "medication_id": {
+      "type": "string",
+      "description": "Unique identifier for the medication"
+    },
+    "name_he": {
+      "type": "string",
+      "description": "Name of the medication in Hebrew"
+    },
+    "name_en": {
+      "type": "string",
+      "description": "Name of the medication in English"
+    },
+    "active_ingredients": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of active ingredients in the medication (required field)"
+    },
+    "dosage_forms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Available dosage forms (e.g., Tablets, Capsules, Syrup)"
+    },
+    "dosage_instructions": {
+      "type": "string",
+      "description": "Detailed dosage instructions including amount and frequency (required field)"
+    },
+    "usage_instructions": {
+      "type": "string",
+      "description": "Instructions on how to use the medication, including when to take it"
+    },
+    "description": {
+      "type": "string",
+      "description": "General description of what the medication is used for"
+    }
+  },
+  "required": ["medication_id", "name_he", "name_en", "active_ingredients", "dosage_forms", "dosage_instructions", "usage_instructions", "description"]
+}
+```
+
+### Error Response Schema
+
+When medication is not found or an error occurs, returns `MedicationSearchError`:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "string",
+      "description": "Error message describing why the search failed"
+    },
+    "searched_name": {
+      "type": "string",
+      "description": "The medication name that was searched for"
+    },
+    "suggestions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of suggested medication names that might match the search query (up to 5 suggestions)"
+    }
+  },
+  "required": ["error", "searched_name", "suggestions"]
+}
+```
+
+### Example Request
+
+#### Example 1: Search in Hebrew
+```json
+{
+  "name": "אקמול",
+  "language": "he"
+}
+```
+
+#### Example 2: Search in English
+```json
+{
+  "name": "Acetaminophen",
+  "language": "en"
+}
+```
+
+#### Example 3: Search Both Languages (Partial Match)
+```json
+{
+  "name": "acam"
+}
+```
+
+#### Example 4: Fuzzy Match
+```json
+{
+  "name": "paracet",
+  "language": "en"
+}
+```
+
+### Example Response
+
+#### Success Response Example
+
 ```json
 {
   "medication_id": "med_001",
@@ -88,74 +288,122 @@ Search for a medication by name with fuzzy matching support. Supports both Hebre
 }
 ```
 
-### Error Response
+#### Error Response Example (Medication Not Found)
 
-**Status:** 404 Not Found
-
-**Schema:**
-```json
-{
-  "error": "string",
-  "searched_name": "string",
-  "suggestions": ["string"]
-}
-```
-
-**Example:**
 ```json
 {
   "error": "Medication 'InvalidMed' not found. Please check the spelling or try a different name.",
   "searched_name": "InvalidMed",
-  "suggestions": ["Acamol", "Advil", "Aspirin"]
+  "suggestions": ["Acamol", "Advil", "Aspirin", "Ibuprofen", "Paracetamol"]
 }
 ```
 
-### Example Requests
+#### Error Response Example (Invalid Input)
 
-**Request 1: Search in Hebrew**
-```python
+```json
 {
-  "name": "אקמול",
-  "language": "he"
+  "error": "Medication name cannot be empty",
+  "searched_name": "",
+  "suggestions": []
 }
 ```
 
-**Request 2: Search in English**
-```python
-{
-  "name": "Acetaminophen",
-  "language": "en"
-}
-```
+### Error Handling
 
-**Request 3: Search both languages (fuzzy match)**
-```python
-{
-  "name": "acam"
-}
-```
+The tool handles the following error scenarios:
 
-### Error Codes
+#### 1. Medication Not Found (404 equivalent)
+- **Error Code:** Not explicitly numbered, but represents a "not found" scenario
+- **Error Message:** `"Medication '{name}' not found. Please check the spelling or try a different name."`
+- **Response:** Returns `MedicationSearchError` with:
+  - `error`: Error message
+  - `searched_name`: The original search query
+  - `suggestions`: List of up to 5 suggested medication names
+- **Fallback Behavior:** Provides suggestions to help user find the correct medication
 
-| Code | Description | Solution |
-|------|-------------|----------|
-| 400 | Invalid parameters (empty name) | Provide a non-empty medication name |
-| 404 | Medication not found | Check spelling or try suggested alternatives |
-| 500 | Internal server error | Check logs for details |
+#### 2. Invalid Parameters (400 equivalent)
+- **Error Code:** Not explicitly numbered, but represents a "bad request" scenario
+- **Error Message:** `"Medication name cannot be empty"` or similar validation error
+- **Response:** Returns `MedicationSearchError` with:
+  - `error`: Validation error message
+  - `searched_name`: The invalid input (or empty string)
+  - `suggestions`: Empty list
+- **Fallback Behavior:** Returns error without suggestions
 
-### Notes
+#### 3. Invalid Language Parameter
+- **Error Code:** Not explicitly numbered, treated as warning
+- **Error Message:** Logged as warning, language parameter ignored
+- **Response:** Tool continues with `language=None` (searches both languages)
+- **Fallback Behavior:** Ignores invalid language parameter and searches both languages
 
-- **Fuzzy Matching**: Partial matches are supported (e.g., "acam" will find "Acamol")
-- **Case Insensitive**: Search is case-insensitive
-- **Required Fields**: Response always includes `active_ingredients` and `dosage_instructions` (required fields)
-- **Suggestions**: Error responses include up to 5 suggested medication names
+#### 4. Database Error (500 equivalent)
+- **Error Code:** Not explicitly numbered, but represents a "server error" scenario
+- **Error Message:** `"An error occurred while searching for the medication: {error_message}"`
+- **Response:** Returns `MedicationSearchError` with:
+  - `error`: Error message describing the system error
+  - `searched_name`: The original search query
+  - `suggestions`: Empty list
+- **Fallback Behavior:** Returns error without suggestions, logs full traceback
+
+#### 5. Missing Required Fields in Medication Data
+- **Error Code:** Not explicitly numbered, represents data integrity issue
+- **Error Message:** `"Medication data is incomplete: missing active ingredients"` or `"Medication data is incomplete: missing dosage instructions"`
+- **Response:** Returns `MedicationSearchError` with:
+  - `error`: Data integrity error message
+  - `searched_name`: The original search query
+  - `suggestions`: Empty list
+- **Fallback Behavior:** Returns error indicating data incompleteness
+
+### Fallback Behavior
+
+The tool implements the following fallback behaviors:
+
+1. **No Medication Found:**
+   - Returns error with helpful suggestions (up to 5 medication names)
+   - Suggestions are generated by:
+     - Searching without language filter
+     - Trying partial matches with first 3 characters if no results
+     - Extracting unique medication names from search results
+
+2. **Invalid Input:**
+   - Returns error message describing the validation failure
+   - No suggestions provided for invalid input
+
+3. **Database Errors:**
+   - Returns error message with system error details
+   - Logs full error traceback for debugging
+   - No suggestions provided for system errors
+
+4. **Invalid Language Parameter:**
+   - Logs warning
+   - Ignores invalid language parameter
+   - Continues search with `language=None` (searches both languages)
+
+5. **Missing Required Fields:**
+   - Returns error indicating data incompleteness
+   - Prevents returning incomplete medication information
+   - Ensures safety by not returning medications without required fields (active_ingredients, dosage_instructions)
+
+### Additional Notes
+
+- **Fuzzy Matching:** The tool supports partial string matching. For example, searching "Acam" will find "Acamol", and searching "paracet" will find "Paracetamol". This is implemented using case-insensitive partial string matching.
+
+- **Multiple Results:** If multiple medications match the search query, the tool returns the first match. In a production system, you might want to return all matches and let the agent choose.
+
+- **Performance:** The tool uses module-level caching for DatabaseManager to improve performance and reduce token usage. The database is loaded once and reused for all tool calls.
+
+- **Required Fields:** The tool validates that all required fields (active_ingredients, dosage_instructions) are present before returning medication information. This ensures data integrity and safety.
 
 ---
 
 ## Tool 2: check_stock_availability
 
-### Purpose
-Check stock availability for a medication by ID. Verifies if medications are in stock, how many units are available, and whether there is sufficient quantity for a specific request.
+### Name and Purpose
+
+**Tool Name:** `check_stock_availability`
+
+**Purpose:**
+Checks stock availability for a medication by ID. This tool enables the AI agent to check medication stock availability when users ask about inventory. It verifies if medications are in stock, how many units are available, and whether there is sufficient quantity for a specific request. Returns complete stock information including availability status, quantity in stock, last restocked date, and whether sufficient quantity is available for the requested amount.
 
 ### OpenAI Function Schema
 
@@ -183,31 +431,143 @@ Check stock availability for a medication by ID. Verifies if medications are in 
 }
 ```
 
-### Input Parameters
+### Input Schema
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `medication_id` | string | Yes | The unique identifier of the medication to check |
-| `quantity` | integer | No | Optional quantity to check availability for. Must be positive if provided |
+The tool accepts the following parameters in JSON format:
 
-### Success Response
-
-**Status:** 200 OK
-
-**Schema:**
 ```json
 {
-  "medication_id": "string",
-  "medication_name": "string",
-  "available": boolean,
-  "quantity_in_stock": integer,
-  "last_restocked": "string",
-  "sufficient_quantity": boolean,
-  "requested_quantity": integer | null
+  "type": "object",
+  "properties": {
+    "medication_id": {
+      "type": "string",
+      "description": "The unique identifier of the medication to check stock for. This is typically obtained from a previous medication search. Example: 'med_001'",
+      "required": true
+    },
+    "quantity": {
+      "type": "integer",
+      "description": "Optional quantity to check availability for. If provided, the tool will verify if there is enough stock to fulfill this quantity. If not provided, only checks general availability. Must be a positive integer. Example: 10",
+      "required": false
+    }
+  },
+  "required": ["medication_id"]
 }
 ```
 
-**Example:**
+### Parameter Details
+
+- **medication_id** (string, required):
+  - The unique identifier of the medication to check stock for
+  - Typically obtained from a previous medication search (e.g., from `get_medication_by_name`)
+  - Example: "med_001", "med_002"
+
+- **quantity** (integer, optional):
+  - Optional quantity to check availability for
+  - If provided, the tool verifies if there is enough stock to fulfill this quantity
+  - Must be a positive integer (>= 0)
+  - If not provided, only checks general availability
+  - Example: 10, 50, 100
+
+### Output Schema
+
+The tool returns a dictionary containing either a success result or an error result.
+
+### Success Response Schema
+
+When medication is found and stock information is retrieved, returns `StockCheckResult`:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "medication_id": {
+      "type": "string",
+      "description": "Unique identifier for the medication"
+    },
+    "medication_name": {
+      "type": "string",
+      "description": "Name of the medication (for display purposes)"
+    },
+    "available": {
+      "type": "boolean",
+      "description": "Whether the medication is currently available in stock"
+    },
+    "quantity_in_stock": {
+      "type": "integer",
+      "description": "Current quantity of the medication in stock"
+    },
+    "last_restocked": {
+      "type": "string",
+      "description": "ISO format datetime string of when the medication was last restocked"
+    },
+    "sufficient_quantity": {
+      "type": "boolean",
+      "description": "Whether there is enough stock for the requested quantity (True if quantity was not provided, or if quantity_in_stock >= requested_quantity)"
+    },
+    "requested_quantity": {
+      "type": "integer",
+      "description": "The quantity that was requested (None if not provided)",
+      "nullable": true
+    }
+  },
+  "required": ["medication_id", "medication_name", "available", "quantity_in_stock", "last_restocked", "sufficient_quantity", "requested_quantity"]
+}
+```
+
+### Error Response Schema
+
+When medication is not found or an error occurs, returns `StockCheckError`:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "string",
+      "description": "Error message describing why the stock check failed"
+    },
+    "medication_id": {
+      "type": "string",
+      "description": "The medication ID that was searched for"
+    },
+    "available": {
+      "type": "boolean",
+      "description": "Fallback availability status (always False for errors, safe default)"
+    }
+  },
+  "required": ["error", "medication_id", "available"]
+}
+```
+
+### Example Request
+
+#### Example 1: Check General Availability
+```json
+{
+  "medication_id": "med_001"
+}
+```
+
+#### Example 2: Check Specific Quantity
+```json
+{
+  "medication_id": "med_001",
+  "quantity": 10
+}
+```
+
+#### Example 3: Check Large Quantity
+```json
+{
+  "medication_id": "med_001",
+  "quantity": 200
+}
+```
+
+### Example Response
+
+#### Success Response Example (Available)
+
 ```json
 {
   "medication_id": "med_001",
@@ -220,20 +580,50 @@ Check stock availability for a medication by ID. Verifies if medications are in 
 }
 ```
 
-### Error Response
+#### Success Response Example (Insufficient Quantity)
 
-**Status:** 404 Not Found
-
-**Schema:**
 ```json
 {
-  "error": "string",
-  "medication_id": "string",
-  "available": false
+  "medication_id": "med_001",
+  "medication_name": "אקמול",
+  "available": true,
+  "quantity_in_stock": 50,
+  "last_restocked": "2024-01-15T10:30:00Z",
+  "sufficient_quantity": false,
+  "requested_quantity": 100
 }
 ```
 
-**Example:**
+#### Success Response Example (Out of Stock)
+
+```json
+{
+  "medication_id": "med_002",
+  "medication_name": "Advil",
+  "available": false,
+  "quantity_in_stock": 0,
+  "last_restocked": "2024-01-10T08:00:00Z",
+  "sufficient_quantity": false,
+  "requested_quantity": 5
+}
+```
+
+#### Success Response Example (No Quantity Requested)
+
+```json
+{
+  "medication_id": "med_001",
+  "medication_name": "אקמול",
+  "available": true,
+  "quantity_in_stock": 150,
+  "last_restocked": "2024-01-15T10:30:00Z",
+  "sufficient_quantity": true,
+  "requested_quantity": null
+}
+```
+
+#### Error Response Example (Medication Not Found)
+
 ```json
 {
   "error": "Medication not found: med_999. Please verify the medication ID.",
@@ -242,51 +632,105 @@ Check stock availability for a medication by ID. Verifies if medications are in 
 }
 ```
 
-### Example Requests
+#### Error Response Example (Invalid Input)
 
-**Request 1: Check general availability**
-```python
+```json
 {
-  "medication_id": "med_001"
+  "error": "Medication ID cannot be empty",
+  "medication_id": "",
+  "available": false
 }
 ```
 
-**Request 2: Check specific quantity**
-```python
+#### Error Response Example (Invalid Quantity)
+
+```json
 {
+  "error": "Quantity cannot be negative",
   "medication_id": "med_001",
-  "quantity": 10
+  "available": false
 }
 ```
 
-**Request 3: Check large quantity**
-```python
-{
-  "medication_id": "med_001",
-  "quantity": 200
-}
-```
+### Error Handling
 
-### Error Codes
+The tool handles the following error scenarios:
 
-| Code | Description | Solution |
-|------|-------------|----------|
-| 400 | Invalid parameters (empty medication_id or negative quantity) | Provide valid medication_id and non-negative quantity |
-| 404 | Medication not found | Verify the medication_id is correct |
-| 500 | Internal server error | Check logs for details |
+#### 1. Medication Not Found (404 equivalent)
+- **Error Code:** Not explicitly numbered, but represents a "not found" scenario
+- **Error Message:** `"Medication not found: {medication_id}. Please verify the medication ID."`
+- **Response:** Returns `StockCheckError` with:
+  - `error`: Error message
+  - `medication_id`: The medication ID that was searched
+  - `available`: `false` (safe default)
+- **Fallback Behavior:** Returns `available=false` as safe default
 
-### Notes
+#### 2. Invalid Parameters (400 equivalent)
+- **Error Code:** Not explicitly numbered, but represents a "bad request" scenario
+- **Error Messages:**
+  - `"Medication ID cannot be empty"` - if medication_id is empty
+  - `"Quantity cannot be negative"` - if quantity is negative
+- **Response:** Returns `StockCheckError` with:
+  - `error`: Validation error message
+  - `medication_id`: The invalid medication ID (or empty string)
+  - `available`: `false` (safe default)
+- **Fallback Behavior:** Returns `available=false` as safe default
 
-- **Safe Fallback**: On errors, always returns `available=false` (safe default)
-- **Quantity Check**: If quantity is provided, `sufficient_quantity` indicates if stock is adequate
-- **Date Format**: `last_restocked` is in ISO 8601 format
+#### 3. Database Error (500 equivalent)
+- **Error Code:** Not explicitly numbered, but represents a "server error" scenario
+- **Error Message:** `"An error occurred while checking stock: {error_message}"`
+- **Response:** Returns `StockCheckError` with:
+  - `error`: Error message describing the system error
+  - `medication_id`: The medication ID that was being checked (or empty string)
+  - `available`: `false` (safe default)
+- **Fallback Behavior:** Returns `available=false` as safe default, logs full traceback
+
+### Fallback Behavior
+
+The tool implements the following fallback behaviors:
+
+1. **Medication Not Found:**
+   - Returns error with `available=false` as safe default
+   - Prevents false positives (claiming medication is available when it doesn't exist)
+   - Provides clear error message to help user verify medication ID
+
+2. **Invalid Input:**
+   - Returns error with `available=false` as safe default
+   - Validates medication_id is not empty
+   - Validates quantity is non-negative if provided
+
+3. **Database Errors:**
+   - Returns error with `available=false` as safe default
+   - Logs full error traceback for debugging
+   - Ensures system errors don't result in false availability claims
+
+4. **Safe Default Principle:**
+   - **Always returns `available=false` on errors** - This is a critical safety feature
+   - Prevents false positives that could mislead users
+   - Ensures conservative behavior when information is uncertain
+
+### Additional Notes
+
+- **Safety First:** The tool always defaults to `available=false` when errors occur. This prevents false positives and ensures users are not misled about medication availability.
+
+- **Quantity Checking:** When a quantity is provided, the tool calculates `sufficient_quantity` by comparing `quantity_in_stock >= requested_quantity`. If quantity is not provided, `sufficient_quantity` is always `true` (since no specific requirement exists).
+
+- **Performance:** The tool uses module-level caching for DatabaseManager to improve performance and reduce token usage. The database is loaded once and reused for all tool calls.
+
+- **Date Format:** The `last_restocked` field is returned in ISO 8601 format (e.g., "2024-01-15T10:30:00Z").
+
+- **Medication Name:** The tool returns the medication name (preferring Hebrew name if available, otherwise English name) for display purposes, making it easier for the agent to provide user-friendly responses.
 
 ---
 
 ## Tool 3: check_prescription_requirement
 
-### Purpose
-Check prescription requirement for a medication by ID. Verifies whether medications require prescriptions, providing essential information for compliance with pharmacy regulations.
+### Name and Purpose
+
+**Tool Name:** `check_prescription_requirement`
+
+**Purpose:**
+Checks prescription requirement for a medication by ID. This tool enables the AI agent to verify whether medications require prescriptions when users ask about prescription requirements. It provides essential information for compliance with pharmacy regulations and helps customers understand what they need before attempting to purchase medications. Returns prescription requirement information including whether a prescription is required and the prescription type (not_required or prescription_required). Uses safe fallback values (requires_prescription=True) when medication is not found or errors occur to ensure safety.
 
 ### OpenAI Function Schema
 
@@ -310,57 +754,243 @@ Check prescription requirement for a medication by ID. Verifies whether medicati
 }
 ```
 
-### Input Parameters
+### Input Schema
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `medication_id` | string | Yes | The unique identifier of the medication to check |
+The tool accepts the following parameters in JSON format:
 
-### Success Response (No Prescription Required)
-
-**Status:** 200 OK
-
-**Schema:**
 ```json
 {
-  "medication_id": "string",
-  "medication_name": "string",
-  "requires_prescription": boolean,
-  "prescription_type": "not_required" | "prescription_required"
+  "type": "object",
+  "properties": {
+    "medication_id": {
+      "type": "string",
+      "description": "The unique identifier of the medication to check prescription requirements for. This is typically obtained from a previous medication search. Example: 'med_001'",
+      "required": true
+    }
+  },
+  "required": ["medication_id"]
 }
 ```
 
-### Success Response (Prescription Required)
+### Parameter Details
 
-**Status:** 200 OK
+- **medication_id** (string, required):
+  - The unique identifier of the medication to check prescription requirements for
+  - Typically obtained from a previous medication search (e.g., from `get_medication_by_name`)
+  - Example: "med_001", "med_002"
 
-**Schema:**
+### Output Schema
+
+The tool returns a dictionary containing either a success result or an error result.
+
+### Success Response Schema
+
+When medication is found and prescription information is retrieved, returns `PrescriptionCheckResult`:
+
 ```json
 {
-  "medication_id": "string",
-  "medication_name": "string",
+  "type": "object",
+  "properties": {
+    "medication_id": {
+      "type": "string",
+      "description": "Unique identifier for the medication"
+    },
+    "medication_name": {
+      "type": "string",
+      "description": "Name of the medication (for display purposes)"
+    },
+    "requires_prescription": {
+      "type": "boolean",
+      "description": "Whether a prescription is required to purchase this medication"
+    },
+    "prescription_type": {
+      "type": "string",
+      "enum": ["not_required", "prescription_required"],
+      "description": "Type of prescription requirement: 'not_required' for over-the-counter medications, 'prescription_required' for medications that need a prescription"
+    }
+  },
+  "required": ["medication_id", "medication_name", "requires_prescription", "prescription_type"]
+}
+```
+
+### Error Response Schema
+
+When medication is not found or an error occurs, returns `PrescriptionCheckError`:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "string",
+      "description": "Error message describing why the prescription check failed"
+    },
+    "medication_id": {
+      "type": "string",
+      "description": "The medication ID that was searched for"
+    },
+    "requires_prescription": {
+      "type": "boolean",
+      "description": "Fallback prescription requirement status (always True for errors, safe default)"
+    },
+    "prescription_type": {
+      "type": "string",
+      "enum": ["not_required", "prescription_required"],
+      "description": "Fallback prescription type (always prescription_required for errors, safe default)"
+    }
+  },
+  "required": ["error", "medication_id", "requires_prescription", "prescription_type"]
+}
+```
+
+### Example Request
+
+#### Example 1: Check Prescription Requirement
+```json
+{
+  "medication_id": "med_001"
+}
+```
+
+#### Example 2: Check Another Medication
+```json
+{
+  "medication_id": "med_003"
+}
+```
+
+### Example Response
+
+#### Success Response Example (No Prescription Required)
+
+```json
+{
+  "medication_id": "med_001",
+  "medication_name": "אקמול",
+  "requires_prescription": false,
+  "prescription_type": "not_required"
+}
+```
+
+#### Success Response Example (Prescription Required)
+
+```json
+{
+  "medication_id": "med_003",
+  "medication_name": "Amoxicillin",
   "requires_prescription": true,
   "prescription_type": "prescription_required"
 }
 ```
 
-### Error Response
+#### Error Response Example (Medication Not Found)
 
-**Status:** Error (but returns structured error)
-
-**Schema:**
 ```json
 {
-  "error": "string",
-  "medication_id": "string",
+  "error": "Medication not found: med_999. Please verify the medication ID.",
+  "medication_id": "med_999",
   "requires_prescription": true,
   "prescription_type": "prescription_required"
 }
 ```
 
-**Notes:**
-- **Safe Fallback**: On errors, always returns `requires_prescription=true` (safe default)
-- **Prescription Type**: Either "not_required" or "prescription_required"
+#### Error Response Example (Invalid Input)
+
+```json
+{
+  "error": "Medication ID cannot be empty",
+  "medication_id": "",
+  "requires_prescription": true,
+  "prescription_type": "prescription_required"
+}
+```
+
+#### Error Response Example (Database Error)
+
+```json
+{
+  "error": "An error occurred while checking prescription requirement: Database connection failed",
+  "medication_id": "med_001",
+  "requires_prescription": true,
+  "prescription_type": "prescription_required"
+}
+```
+
+### Error Handling
+
+The tool handles the following error scenarios:
+
+#### 1. Medication Not Found (404 equivalent)
+- **Error Code:** Not explicitly numbered, but represents a "not found" scenario
+- **Error Message:** `"Medication not found: {medication_id}. Please verify the medication ID."`
+- **Response:** Returns `PrescriptionCheckError` with:
+  - `error`: Error message
+  - `medication_id`: The medication ID that was searched
+  - `requires_prescription`: `true` (safe default)
+  - `prescription_type`: `"prescription_required"` (safe default)
+- **Fallback Behavior:** Returns `requires_prescription=true` and `prescription_type="prescription_required"` as safe defaults
+
+#### 2. Invalid Parameters (400 equivalent)
+- **Error Code:** Not explicitly numbered, but represents a "bad request" scenario
+- **Error Message:** `"Medication ID cannot be empty"` - if medication_id is empty
+- **Response:** Returns `PrescriptionCheckError` with:
+  - `error`: Validation error message
+  - `medication_id`: The invalid medication ID (or empty string)
+  - `requires_prescription`: `true` (safe default)
+  - `prescription_type`: `"prescription_required"` (safe default)
+- **Fallback Behavior:** Returns `requires_prescription=true` and `prescription_type="prescription_required"` as safe defaults
+
+#### 3. Database Error (500 equivalent)
+- **Error Code:** Not explicitly numbered, but represents a "server error" scenario
+- **Error Message:** `"An error occurred while checking prescription requirement: {error_message}"`
+- **Response:** Returns `PrescriptionCheckError` with:
+  - `error`: Error message describing the system error
+  - `medication_id`: The medication ID that was being checked (or empty string)
+  - `requires_prescription`: `true` (safe default)
+  - `prescription_type`: `"prescription_required"` (safe default)
+- **Fallback Behavior:** Returns `requires_prescription=true` and `prescription_type="prescription_required"` as safe defaults, logs full traceback
+
+### Fallback Behavior
+
+The tool implements the following fallback behaviors:
+
+1. **Medication Not Found:**
+   - Returns error with `requires_prescription=true` and `prescription_type="prescription_required"` as safe defaults
+   - **Safety Principle:** When in doubt, require a prescription
+   - Prevents illegal sales by defaulting to requiring a prescription when medication information is uncertain
+   - Provides clear error message to help user verify medication ID
+
+2. **Invalid Input:**
+   - Returns error with `requires_prescription=true` and `prescription_type="prescription_required"` as safe defaults
+   - Validates medication_id is not empty
+   - Ensures safety by defaulting to requiring a prescription when input is invalid
+
+3. **Database Errors:**
+   - Returns error with `requires_prescription=true` and `prescription_type="prescription_required"` as safe defaults
+   - Logs full error traceback for debugging
+   - Ensures system errors don't result in unsafe medication sales
+
+4. **Safe Default Principle:**
+   - **Always returns `requires_prescription=true` on errors** - This is a critical safety feature
+   - **Always returns `prescription_type="prescription_required"` on errors** - Ensures compliance
+   - Prevents illegal sales by defaulting to requiring a prescription when information is uncertain
+   - Ensures safety by defaulting to requiring a prescription when information is uncertain
+
+### Additional Notes
+
+- **Safety First:** The tool always defaults to `requires_prescription=true` and `prescription_type="prescription_required"` when errors occur. This is a critical safety feature that prevents illegal medication sales and ensures compliance with pharmacy regulations.
+
+- **Prescription Types:**
+  - `"not_required"`: Over-the-counter medications that can be purchased without a prescription
+  - `"prescription_required"`: Medications that require a valid prescription from a healthcare professional
+
+- **Compliance:** The safe fallback behavior ensures compliance with pharmacy regulations by defaulting to requiring a prescription when medication information is uncertain. This prevents accidental illegal sales.
+
+- **Performance:** The tool uses module-level caching for DatabaseManager to improve performance and reduce token usage. The database is loaded once and reused for all tool calls.
+
+- **Medication Name:** The tool returns the medication name (preferring Hebrew name if available, otherwise English name) for display purposes, making it easier for the agent to provide user-friendly responses.
+
+- **Error Handling Philosophy:** The tool follows a "safety first" approach - when in doubt, require a prescription. This ensures patient safety and regulatory compliance.
 
 ---
 
@@ -691,9 +1321,155 @@ result = execute_tool(
 
 ---
 
+## Tool Architecture
+
+### Design Principles
+
+1. **OpenAI Function Calling Compatible**: All tools are designed to work with OpenAI's function calling API
+2. **Type Safety**: Full type hints and Pydantic models for input/output validation
+3. **Error Handling**: Comprehensive error handling with safe fallback values
+4. **Performance**: Module-level caching for DatabaseManager to reduce token usage
+5. **Documentation**: Detailed docstrings following core-python-standards
+
+### Common Patterns
+
+All tools follow these patterns:
+- Input validation and normalization
+- Database lookup via DatabaseManager
+- Success/error result building
+- Structured error responses
+- Logging at appropriate levels
+
+## Input/Output Models (Pydantic)
+
+All tools use Pydantic models for type-safe input/output validation:
+
+### Medication Tools Models
+
+#### `MedicationSearchInput`
+- `name` (str, required): Medication name to search for
+- `language` (Optional[Literal["he", "en"]]): Language filter
+
+#### `MedicationSearchResult`
+- Basic medication fields only (no stock or prescription information)
+- Includes required fields: `active_ingredients`, `dosage_instructions`
+- Fields: `medication_id`, `name_he`, `name_en`, `active_ingredients`, `dosage_forms`, `dosage_instructions`, `usage_instructions`, `description`
+- Does NOT include: `requires_prescription`, `available`, `quantity_in_stock` (use separate tools for these)
+
+#### `MedicationSearchError`
+- `error` (str): Error message
+- `searched_name` (str): Original search query
+- `suggestions` (List[str]): Suggested medication names
+
+### Inventory Tools Models
+
+#### `StockCheckInput`
+- `medication_id` (str, required): Medication ID
+- `quantity` (Optional[int]): Quantity to check
+
+#### `StockCheckResult`
+- `medication_id`, `medication_name`
+- `available`, `quantity_in_stock`, `last_restocked`
+- `sufficient_quantity`, `requested_quantity`
+
+#### `StockCheckError`
+- `error` (str): Error message
+- `medication_id` (str): Medication ID searched
+- `available` (bool): Always False for errors
+
+### Prescription Tools Models
+
+#### `PrescriptionCheckInput`
+- `medication_id` (str, required): Medication ID
+
+#### `PrescriptionCheckResult`
+- `medication_id`, `medication_name`
+- `requires_prescription` (bool)
+- `prescription_type` (Literal["not_required", "prescription_required"])
+
+#### `PrescriptionCheckError`
+- `error` (str): Error message
+- `medication_id` (str): Medication ID searched
+- `requires_prescription` (bool): Always True for errors (safe default)
+- `prescription_type` (Literal): Always "prescription_required" for errors
+
+### User Tools Models
+
+#### `UserSearchInput`
+- `name_or_email` (str, required): User name or email to search for
+
+#### `UserSearchResult`
+- `user_id` (str): Unique identifier for the user (use for other user tools)
+- `name` (str): Full name of the user
+- `email` (str): Email address of the user
+- `prescriptions` (List[str]): List of prescription IDs associated with this user
+
+#### `UserSearchError`
+- `error` (str): Error message
+- `searched_name_or_email` (str): Original search query
+- `suggestions` (List[str]): Suggested user names or emails
+
+#### `UserPrescriptionsInput`
+- `user_id` (str, required): User ID to get prescriptions for
+
+#### `UserPrescriptionsResult`
+- `user_id` (str): Unique identifier for the user
+- `user_name` (str): Full name of the user
+- `prescriptions` (List[PrescriptionInfo]): List of prescription information (empty if no prescriptions)
+
+#### `PrescriptionInfo`
+- All prescription fields plus medication names (Hebrew and English)
+- Fields: `prescription_id`, `medication_id`, `medication_name_he`, `medication_name_en`, `prescribed_by`, `prescription_date`, `expiry_date`, `quantity`, `refills_remaining`, `status`
+
+#### `PrescriptionCheckInput` (User Prescription)
+- `user_id` (str, required): User ID to check prescription for
+- `medication_id` (str, required): Medication ID to check prescription for
+
+#### `PrescriptionCheckResult` (User Prescription)
+- `has_active_prescription` (bool): Whether user has active prescription
+- `prescription_details` (Optional[PrescriptionInfo]): Prescription details if active prescription exists, None otherwise
+
+## Error Handling Patterns
+
+All tools follow consistent error handling:
+
+1. **Input Validation**: Validate and normalize inputs first
+2. **Database Lookup**: Attempt database lookup
+3. **Success Path**: Build and return success result
+4. **Error Path**: Build and return error result with safe fallbacks
+5. **Logging**: Log at appropriate levels (DEBUG, INFO, WARNING, ERROR)
+
+### Safe Fallback Values
+
+- **Stock Tools**: `available=False` on errors
+- **Prescription Tools**: `requires_prescription=True` on errors (safety first)
+- **Medication Tools**: Error with suggestions (no fallback, user must retry)
+
+## Performance Optimization
+
+### Module-Level Caching
+
+All tools use module-level caching for DatabaseManager:
+
+```python
+_db_manager: Optional[DatabaseManager] = None
+
+def _get_db_manager() -> DatabaseManager:
+    global _db_manager
+    if _db_manager is None:
+        _db_manager = DatabaseManager()
+        _db_manager.load_db()
+    return _db_manager
+```
+
+**Benefits:**
+- Reduces token usage (database loaded once)
+- Improves performance (no repeated file reads)
+- Maintains database state across tool calls
+
 ## Best Practices
 
-1. **Always validate inputs**: Check parameters before processing
+1. **Always validate inputs**: Use helper functions for validation
 2. **Use safe fallbacks**: Default to safe values on errors
 3. **Log appropriately**: Use correct log levels (DEBUG, INFO, WARNING, ERROR)
 4. **Return structured errors**: Always return consistent error format

@@ -16,6 +16,10 @@ available stock.
 """
 
 import logging
+import os
+import json
+import time
+from pathlib import Path
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 from app.database.db import DatabaseManager
@@ -47,13 +51,15 @@ def _get_db_manager() -> DatabaseManager:
     """
     global _db_manager
     # #region agent log
-    import time
-    import json
-    DEBUG_LOG_PATH = r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log"
+    # Debug log path - only used if the directory exists (for local development)
+    # In Docker/production, this will silently fail (no logging to file)
+    DEBUG_LOG_PATH = Path(__file__).parent.parent.parent / ".cursor" / "debug.log"
     db_get_start = time.time()
     try:
-        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "H1", "location": "app/tools/inventory_tools.py:_get_db_manager:entry", "message": "_get_db_manager called", "data": {"_db_manager_is_none": _db_manager is None}, "timestamp": int(time.time() * 1000)}) + "\n")
+        log_dir = DEBUG_LOG_PATH.parent
+        if log_dir.exists():
+            with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "H1", "location": "app/tools/inventory_tools.py:_get_db_manager:entry", "message": "_get_db_manager called", "data": {"_db_manager_is_none": _db_manager is None}, "timestamp": int(time.time() * 1000)}) + "\n")
     except Exception:
         pass
     # #endregion
@@ -61,8 +67,10 @@ def _get_db_manager() -> DatabaseManager:
         # #region agent log
         db_create_start = time.time()
         try:
-            with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "H1", "location": "app/tools/inventory_tools.py:_get_db_manager:creating", "message": "Creating DatabaseManager", "data": {}, "timestamp": int(time.time() * 1000)}) + "\n")
+            log_dir = DEBUG_LOG_PATH.parent
+            if log_dir.exists():
+                with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "H1", "location": "app/tools/inventory_tools.py:_get_db_manager:creating", "message": "Creating DatabaseManager", "data": {}, "timestamp": int(time.time() * 1000)}) + "\n")
         except Exception:
             pass
         # #endregion
@@ -71,15 +79,19 @@ def _get_db_manager() -> DatabaseManager:
         _db_manager.load_db()
         # #region agent log
         try:
-            with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "H1", "location": "app/tools/inventory_tools.py:_get_db_manager:created", "message": "DatabaseManager created and loaded", "data": {"duration_ms": (time.time() - db_create_start) * 1000}, "timestamp": int(time.time() * 1000)}) + "\n")
+            log_dir = DEBUG_LOG_PATH.parent
+            if log_dir.exists():
+                with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "H1", "location": "app/tools/inventory_tools.py:_get_db_manager:created", "message": "DatabaseManager created and loaded", "data": {"duration_ms": (time.time() - db_create_start) * 1000}, "timestamp": int(time.time() * 1000)}) + "\n")
         except Exception:
             pass
         # #endregion
     # #region agent log
     try:
-        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "H1", "location": "app/tools/inventory_tools.py:_get_db_manager:return", "message": "_get_db_manager returning", "data": {"total_duration_ms": (time.time() - db_get_start) * 1000}, "timestamp": int(time.time() * 1000)}) + "\n")
+        log_dir = DEBUG_LOG_PATH.parent
+        if log_dir.exists():
+            with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "initial", "hypothesisId": "H1", "location": "app/tools/inventory_tools.py:_get_db_manager:return", "message": "_get_db_manager returning", "data": {"total_duration_ms": (time.time() - db_get_start) * 1000}, "timestamp": int(time.time() * 1000)}) + "\n")
     except Exception:
         pass
     # #endregion

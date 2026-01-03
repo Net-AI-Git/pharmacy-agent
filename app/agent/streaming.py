@@ -33,9 +33,15 @@ from app.security.audit_logger import AuditLogger
 from app.security.correlation import generate_correlation_id
 
 # #region agent log
-DEBUG_LOG_PATH = r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log"
+# Debug log path - only used if the directory exists (for local development)
+# In Docker/production, this will silently fail (no logging to file)
+DEBUG_LOG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".cursor", "debug.log")
 def _debug_log(location: str, message: str, data: dict = None, hypothesis_id: str = None):
     try:
+        # Only log if the directory exists (local development)
+        log_dir = os.path.dirname(DEBUG_LOG_PATH)
+        if not os.path.exists(log_dir):
+            return
         log_entry = {
             "sessionId": "debug-session",
             "runId": "initial",

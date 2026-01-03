@@ -30,9 +30,15 @@ from app.agent import StreamingAgent
 logger = logging.getLogger(__name__)
 
 # #region agent log
-DEBUG_LOG_PATH = r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log"
+# Debug log path - only used if the directory exists (for local development)
+# In Docker/production, this will silently fail (no logging to file)
+DEBUG_LOG_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".cursor", "debug.log")
 def _debug_log(location: str, message: str, data: dict = None, hypothesis_id: str = None):
     try:
+        # Only log if the directory exists (local development)
+        log_dir = os.path.dirname(DEBUG_LOG_PATH)
+        if not os.path.exists(log_dir):
+            return
         log_entry = {
             "sessionId": "debug-session",
             "runId": "initial",
@@ -448,11 +454,7 @@ def create_chat_interface() -> gr.Blocks:
     logger.info("Creating Gradio interface with tool call display")
     
     # #region agent log
-    try:
-        with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId": "debug-session", "runId": "theme-fix", "hypothesisId": "A", "location": "app/main.py:425", "message": "Starting theme creation", "data": {"gradio_version": gr.__version__ if hasattr(gr, "__version__") else "unknown"}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
-    except Exception:
-        pass
+    _debug_log("app/main.py:425", "Starting theme creation", {"gradio_version": gr.__version__ if hasattr(gr, "__version__") else "unknown"}, "A")
     # #endregion
     
     # Create a custom theme with modern colors
@@ -461,11 +463,7 @@ def create_chat_interface() -> gr.Blocks:
     # Using solid colors instead of gradients for better compatibility
     try:
         # #region agent log
-        try:
-            with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "theme-fix", "hypothesisId": "A", "location": "app/main.py:432", "message": "Creating base theme", "data": {}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
-        except Exception:
-            pass
+        _debug_log("app/main.py:432", "Creating base theme", {}, "A")
         # #endregion
         
         base_theme = gr.themes.Soft(
@@ -477,11 +475,7 @@ def create_chat_interface() -> gr.Blocks:
         )
         
         # #region agent log
-        try:
-            with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "theme-fix", "hypothesisId": "A", "location": "app/main.py:442", "message": "Setting theme properties", "data": {"properties_count": 10}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
-        except Exception:
-            pass
+        _debug_log("app/main.py:442", "Setting theme properties", {"properties_count": 10}, "A")
         # #endregion
         
         # Only use properties that exist in Gradio 4.0
@@ -499,19 +493,11 @@ def create_chat_interface() -> gr.Blocks:
         )
         
         # #region agent log
-        try:
-            with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "theme-fix", "hypothesisId": "A", "location": "app/main.py:458", "message": "Theme created successfully", "data": {"theme_type": str(type(custom_theme))}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
-        except Exception:
-            pass
+        _debug_log("app/main.py:458", "Theme created successfully", {"theme_type": str(type(custom_theme))}, "A")
         # #endregion
     except Exception as e:
         # #region agent log
-        try:
-            with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
-                f.write(json.dumps({"sessionId": "debug-session", "runId": "theme-fix", "hypothesisId": "A", "location": "app/main.py:463", "message": "Theme creation failed", "data": {"error": str(e), "error_type": type(e).__name__}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
-        except Exception:
-            pass
+        _debug_log("app/main.py:463", "Theme creation failed", {"error": str(e), "error_type": type(e).__name__}, "A")
         # #endregion
         logger.warning(f"Failed to create custom theme, using default Soft theme: {e}")
         custom_theme = gr.themes.Soft()
@@ -528,32 +514,33 @@ def create_chat_interface() -> gr.Blocks:
     /* Header styling */
     .header-section {
         background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
-        padding: 2rem;
-        border-radius: 16px;
-        margin-bottom: 2rem;
+        padding: 1rem;
+        border-radius: 12px;
+        margin-bottom: 1rem;
         color: white;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.1);
     }
     
     .header-section h1 {
         color: white !important;
-        margin: 0 0 1rem 0;
-        font-size: 2.5rem;
+        margin: 0 0 0.5rem 0;
+        font-size: 1.5rem;
         font-weight: 700;
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
     
     .header-section h2 {
         color: rgba(255, 255, 255, 0.95) !important;
-        margin: 1.5rem 0 1rem 0;
-        font-size: 1.8rem;
+        margin: 1rem 0 0.5rem 0;
+        font-size: 1.3rem;
         font-weight: 600;
     }
     
     .header-section p, .header-section li {
         color: rgba(255, 255, 255, 0.9) !important;
-        font-size: 1.1rem;
-        line-height: 1.6;
+        font-size: 0.9rem;
+        line-height: 1.4;
+        margin: 0.3rem 0;
     }
     
     .header-section strong {
@@ -661,15 +648,15 @@ def create_chat_interface() -> gr.Blocks:
     /* Responsive design */
     @media (max-width: 768px) {
         .header-section {
-            padding: 1.5rem;
+            padding: 0.75rem;
         }
         
         .header-section h1 {
-            font-size: 2rem;
+            font-size: 1.3rem;
         }
         
         .header-section h2 {
-            font-size: 1.5rem;
+            font-size: 1.1rem;
         }
     }
     """
@@ -759,6 +746,25 @@ def create_chat_interface() -> gr.Blocks:
                     size="lg"
                 )
         
+        # Examples section - moved below input box
+        with gr.Row():
+            gr.Examples(
+                examples=[
+                    "Tell me about Acamol",
+                    "What are the active ingredients in Ibuprofen?",
+                    "Is Tylenol available in stock?",
+                    "Does Acamol require a prescription?",
+                    "I'm John Doe, what are my prescriptions?",
+                    "מה זה אקמול?",
+                    "איזה מרכיבים פעילים יש בפאראצטמול?",
+                    "האם יש לכם אקמול במלאי?",
+                    "מה המרשמים שלי? אני John Doe",
+                    "הראה לי את התיק הרפואי שלי"
+                ],
+                inputs=msg,
+                label="💡 Example Questions | שאלות לדוגמה"
+            )
+        
         # Main chat area
         with gr.Row():
             chatbot = gr.Chatbot(
@@ -775,24 +781,6 @@ def create_chat_interface() -> gr.Blocks:
                 label="",
                 visible=True,
                 show_label=False
-            )
-        
-        # Examples section
-        with gr.Row():
-            gr.Examples(
-                examples=[
-                    "💊 Tell me about Acamol",
-                    "📦 Is Tylenol available in stock?",
-                    "💊 תספר לי על אקמול",
-                    "📦 האם יש לכם אקמול במלאי?",
-                    "📝 Does Acamol require a prescription?",
-                    "👤 I'm John Doe, what are my prescriptions?",
-                    "👤 מה המרשמים שלי? אני John Doe",
-                    "📋 Show me my medical record",
-                    "📋 הראה לי את התיק הרפואי שלי"
-                ],
-                inputs=msg,
-                label="💡 Example Questions | שאלות לדוגמה"
             )
         
         def hash_password(password: str) -> str:
@@ -947,11 +935,30 @@ def create_chat_interface() -> gr.Blocks:
             """
             try:
                 # #region agent log
-                _debug_log("app/main.py:respond:entry", "respond function called", {"message": message[:50] if message else "", "message_type": str(type(message)), "history_length": len(history) if history else 0, "history_type": str(type(history)), "history_sample": str(history[:2]) if history else "[]", "first_entry_type": str(type(history[0])) if history and len(history) > 0 else "N/A"}, "H1")
+                import json as json_module
+                _debug_log("app/main.py:respond:entry", "respond function called", {
+                    "message": message[:100] if message else "", 
+                    "message_is_none": message is None,
+                    "message_is_empty": message == "" if message else None,
+                    "message_type": str(type(message)), 
+                    "history_is_none": history is None,
+                    "history_length": len(history) if history else 0, 
+                    "history_type": str(type(history)), 
+                    "history_sample": json_module.dumps(history[:2]) if history and len(history) > 0 else "[]", 
+                    "first_entry_type": str(type(history[0])) if history and len(history) > 0 else "N/A",
+                    "authenticated_user_id": authenticated_user_id,
+                    "authenticated_username": authenticated_username
+                }, "H1")
                 # #endregion
                 if not message or not message.strip():
                     # #region agent log
-                    _debug_log("app/main.py:respond:empty", "Empty message detected", {"history_type": str(type(history or [])), "will_yield_empty_dict": True}, "H1")
+                    _debug_log("app/main.py:respond:empty", "Empty message detected", {
+                        "message": str(message),
+                        "message_is_none": message is None,
+                        "message_stripped": message.strip() if message else "",
+                        "history_type": str(type(history or [])), 
+                        "will_yield_empty_dict": True
+                    }, "H2")
                     # #endregion
                     # Ensure history is a valid list of dicts
                     valid_history = []
@@ -962,6 +969,12 @@ def create_chat_interface() -> gr.Blocks:
                                     "role": str(entry["role"]),
                                     "content": str(entry.get("content", ""))
                                 })
+                    # #region agent log
+                    _debug_log("app/main.py:respond:empty_yield", "Yielding empty response", {
+                        "valid_history_length": len(valid_history),
+                        "valid_history": json_module.dumps(valid_history)
+                    }, "H2")
+                    # #endregion
                     yield (valid_history, {})
                     return
                 
@@ -1084,15 +1097,30 @@ def create_chat_interface() -> gr.Blocks:
                     # #endregion
                     # Ensure tool_calls_data is never None (gr.JSON requires dict or list, not None)
                     if tool_calls_data is None:
+                        # #region agent log
+                        _debug_log("app/main.py:respond:tool_calls_none", "tool_calls_data is None, setting to empty dict", {}, "H5")
+                        # #endregion
                         tool_calls_data = {}
                     # Ensure tool_calls_data is dict or list (not other types)
                     if not isinstance(tool_calls_data, (dict, list)):
                         # #region agent log
-                        _debug_log("app/main.py:respond:invalid_tool_calls_before_yield", "Invalid tool_calls_data type before yield", {"tool_calls_data_type": str(type(tool_calls_data))}, "H4")
+                        _debug_log("app/main.py:respond:invalid_tool_calls_before_yield", "Invalid tool_calls_data type before yield", {
+                            "tool_calls_data_type": str(type(tool_calls_data)),
+                            "tool_calls_data_value": str(tool_calls_data)[:200]
+                        }, "H5")
                         # #endregion
                         tool_calls_data = {}
                     # #region agent log
-                    _debug_log("app/main.py:respond:before_yield", "Before yielding", {"history_length": len(updated_history), "history_type": str(type(updated_history)), "tool_calls_data_type": str(type(tool_calls_data)), "tool_calls_data_is_none": tool_calls_data is None, "response_text_length": len(response_text)}, "H4")
+                    _debug_log("app/main.py:respond:before_yield", "Before yielding", {
+                        "history_length": len(updated_history), 
+                        "history_type": str(type(updated_history)), 
+                        "tool_calls_data_type": str(type(tool_calls_data)), 
+                        "tool_calls_data_is_none": tool_calls_data is None,
+                        "tool_calls_data_is_dict": isinstance(tool_calls_data, dict),
+                        "tool_calls_data_is_list": isinstance(tool_calls_data, list),
+                        "response_text_length": len(response_text),
+                        "updated_history_sample": json_module.dumps(updated_history[-2:]) if updated_history else "[]"
+                    }, "H3")
                     # #endregion
                     yield updated_history, tool_calls_data
                 
@@ -1127,7 +1155,13 @@ def create_chat_interface() -> gr.Blocks:
                     yield final_history, tool_calls_data
             except Exception as e:
                 # #region agent log
-                _debug_log("app/main.py:respond:exception", "Exception in respond function", {"error": str(e), "error_type": str(type(e))}, "H1")
+                import traceback
+                _debug_log("app/main.py:respond:exception", "Exception in respond function", {
+                    "error": str(e), 
+                    "error_type": str(type(e)),
+                    "error_repr": repr(e),
+                    "traceback": traceback.format_exc()[:500]
+                }, "H3")
                 # #endregion
                 logger.error(f"Error in respond function: {str(e)}", exc_info=True)
                 # Build error history with error message - ensure streaming behavior
@@ -1182,10 +1216,45 @@ def create_chat_interface() -> gr.Blocks:
         # Gradio automatically detects generators and enables streaming
         # The respond function yields updates in real-time, updating the UI chunk by chunk
         # #region agent log
-        _debug_log("app/main.py:connect_components", "Connecting Gradio components", {"msg_type": str(type(msg)), "chatbot_type": str(type(chatbot)), "tool_calls_display_type": str(type(tool_calls_display))}, "H5")
+        _debug_log("app/main.py:connect_components", "Connecting Gradio components", {
+            "msg_type": str(type(msg)), 
+            "chatbot_type": str(type(chatbot)), 
+            "tool_calls_display_type": str(type(tool_calls_display)),
+            "msg_id": str(id(msg)) if msg else "None",
+            "chatbot_id": str(id(chatbot)) if chatbot else "None"
+        }, "H4")
         # #endregion
+        
+        def submit_wrapper(message, history, auth_user, auth_username, auth_password, auth_password_hash):
+            # #region agent log
+            _debug_log("app/main.py:submit_wrapper", "submit_wrapper called", {
+                "message": message[:100] if message else "",
+                "message_is_none": message is None,
+                "history_length": len(history) if history else 0,
+                "history_is_none": history is None
+            }, "H4")
+            # #endregion
+            try:
+                for result in respond(message, history, auth_user, auth_username, auth_password, auth_password_hash):
+                    yield result
+            except Exception as e:
+                # #region agent log
+                import traceback
+                _debug_log("app/main.py:submit_wrapper:exception", "Exception in submit_wrapper", {
+                    "error": str(e),
+                    "error_type": str(type(e)),
+                    "traceback": traceback.format_exc()[:500]
+                }, "H3")
+                # #endregion
+                # Return error state
+                error_history = history or []
+                if message:
+                    error_history.append({"role": "user", "content": message})
+                error_history.append({"role": "assistant", "content": f"Error: {str(e)}"})
+                yield (error_history, {})
+        
         msg.submit(
-            respond,
+            submit_wrapper,
             inputs=[msg, chatbot, authenticated_user, authenticated_username, authenticated_password, authenticated_password_hash],
             outputs=[chatbot, tool_calls_display]
         ).then(
@@ -1194,7 +1263,7 @@ def create_chat_interface() -> gr.Blocks:
         )
         
         submit_btn.click(
-            respond,
+            submit_wrapper,
             inputs=[msg, chatbot, authenticated_user, authenticated_username, authenticated_password, authenticated_password_hash],
             outputs=[chatbot, tool_calls_display]
         ).then(
@@ -1224,19 +1293,11 @@ _debug_log("app/main.py:536", "Starting Gradio app creation", {"agent_is_none": 
 # #endregion
 try:
     # #region agent log
-    try:
-        with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId": "debug-session", "runId": "post-fix", "hypothesisId": "B", "location": "app/main.py:1034", "message": "Calling create_chat_interface()", "data": {}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
-    except Exception:
-        pass
+    _debug_log("app/main.py:1034", "Calling create_chat_interface()", {}, "B")
     # #endregion
     result = create_chat_interface()
     # #region agent log
-    try:
-        with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId": "debug-session", "runId": "post-fix", "hypothesisId": "B", "location": "app/main.py:1036", "message": "create_chat_interface() returned", "data": {"result_type": str(type(result)), "is_tuple": isinstance(result, tuple)}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
-    except Exception:
-        pass
+    _debug_log("app/main.py:1036", "create_chat_interface() returned", {"result_type": str(type(result)), "is_tuple": isinstance(result, tuple)}, "B")
     # #endregion
     app = result
     # Get theme and css from module-level variables (set by create_chat_interface)
@@ -1248,11 +1309,7 @@ try:
     # #endregion
 except Exception as e:
     # #region agent log
-    try:
-        with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
-            f.write(json.dumps({"sessionId": "debug-session", "runId": "post-fix", "hypothesisId": "B", "location": "app/main.py:1050", "message": "Exception in create_chat_interface()", "data": {"error": str(e), "error_type": type(e).__name__}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
-    except Exception:
-        pass
+    _debug_log("app/main.py:1050", "Exception in create_chat_interface()", {"error": str(e), "error_type": type(e).__name__}, "B")
     # #endregion
     logger.error(f"Main application: Failed to create ChatInterface: {str(e)}", exc_info=True)
     app = None
