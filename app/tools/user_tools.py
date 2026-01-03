@@ -147,19 +147,26 @@ class PrescriptionInfo(BaseModel):
     Prescription information schema for user prescriptions result.
     
     Purpose (Why):
-    Provides detailed prescription information including medication name for
-    better user experience. Combines prescription data with medication name
-    for complete prescription details.
+    Provides detailed prescription information including complete medication details
+    to avoid redundant tool calls. When get_user_prescriptions returns this information,
+    the AI agent has all medication details (active ingredients, dosage, etc.) and
+    doesn't need to call get_medication_by_name separately, reducing latency.
     
     Implementation (What):
     Inherits from Pydantic BaseModel for validation and serialization. Includes
-    all prescription fields plus medication name for display.
+    all prescription fields plus complete medication information (names, active ingredients,
+    dosage instructions, etc.) to prevent redundant tool calls.
     
     Attributes:
         prescription_id: Unique identifier for the prescription
         medication_id: ID of the prescribed medication
         medication_name_he: Name of the medication in Hebrew
         medication_name_en: Name of the medication in English
+        active_ingredients: List of active ingredients (to avoid calling get_medication_by_name)
+        dosage_forms: Available dosage forms
+        dosage_instructions: Detailed dosage instructions
+        usage_instructions: Instructions on how to use the medication
+        description: General description of what the medication is used for
         prescribed_by: Name of the doctor who prescribed the medication
         prescription_date: ISO format datetime string of when the prescription was issued
         expiry_date: ISO format datetime string of when the prescription expires
@@ -171,6 +178,11 @@ class PrescriptionInfo(BaseModel):
     medication_id: str = Field(description="ID of the prescribed medication")
     medication_name_he: str = Field(description="Name of the medication in Hebrew")
     medication_name_en: str = Field(description="Name of the medication in English")
+    active_ingredients: List[str] = Field(default_factory=list, description="List of active ingredients in the medication")
+    dosage_forms: List[str] = Field(default_factory=list, description="Available dosage forms (e.g., Tablets, Capsules, Syrup)")
+    dosage_instructions: Optional[str] = Field(default=None, description="Detailed dosage instructions including amount and frequency")
+    usage_instructions: Optional[str] = Field(default=None, description="Instructions on how to use the medication, including when to take it")
+    description: Optional[str] = Field(default=None, description="General description of what the medication is used for")
     prescribed_by: str = Field(description="Name of the doctor who prescribed the medication")
     prescription_date: str = Field(description="ISO format datetime string of when the prescription was issued")
     expiry_date: str = Field(description="ISO format datetime string of when the prescription expires")
@@ -580,7 +592,9 @@ def get_user_prescriptions(user_id: str, authenticated_user_id: Optional[str] = 
         prescriptions = db_manager.get_prescriptions_by_user(normalized_user_id)
         logger.info(f"Found {len(prescriptions)} prescriptions for user: {normalized_user_id}")
         
-        # Enrich prescriptions with medication names
+        # Enrich prescriptions with complete medication information to avoid redundant tool calls
+        # This includes all medication details (active ingredients, dosage, etc.) so the AI
+        # doesn't need to call get_medication_by_name separately, reducing latency
         prescription_info_list = []
         for prescription in prescriptions:
             medication = db_manager.get_medication_by_id(prescription.medication_id)
@@ -590,6 +604,11 @@ def get_user_prescriptions(user_id: str, authenticated_user_id: Optional[str] = 
                     medication_id=prescription.medication_id,
                     medication_name_he=medication.name_he,
                     medication_name_en=medication.name_en,
+                    active_ingredients=medication.active_ingredients,
+                    dosage_forms=medication.dosage_forms,
+                    dosage_instructions=medication.dosage_instructions,
+                    usage_instructions=medication.usage_instructions,
+                    description=medication.description,
                     prescribed_by=prescription.prescribed_by,
                     prescription_date=prescription.prescription_date,
                     expiry_date=prescription.expiry_date,
@@ -606,6 +625,11 @@ def get_user_prescriptions(user_id: str, authenticated_user_id: Optional[str] = 
                     medication_id=prescription.medication_id,
                     medication_name_he="Unknown",
                     medication_name_en="Unknown",
+                    active_ingredients=[],
+                    dosage_forms=[],
+                    dosage_instructions=None,
+                    usage_instructions=None,
+                    description=None,
                     prescribed_by=prescription.prescribed_by,
                     prescription_date=prescription.prescription_date,
                     expiry_date=prescription.expiry_date,
@@ -753,6 +777,11 @@ def check_user_prescription_for_medication(user_id: str, medication_id: str, aut
                 medication_id=active_prescription.medication_id,
                 medication_name_he=medication.name_he,
                 medication_name_en=medication.name_en,
+                active_ingredients=medication.active_ingredients,
+                dosage_forms=medication.dosage_forms,
+                dosage_instructions=medication.dosage_instructions,
+                usage_instructions=medication.usage_instructions,
+                description=medication.description,
                 prescribed_by=active_prescription.prescribed_by,
                 prescription_date=active_prescription.prescription_date,
                 expiry_date=active_prescription.expiry_date,
@@ -948,7 +977,9 @@ def get_authenticated_user_info(username: str, password: str, authenticated_user
         prescriptions = db_manager.get_prescriptions_by_user(user.user_id)
         logger.info(f"Found {len(prescriptions)} prescriptions for authenticated user: {user.user_id}")
         
-        # Enrich prescriptions with medication names
+        # Enrich prescriptions with complete medication information to avoid redundant tool calls
+        # This includes all medication details (active ingredients, dosage, etc.) so the AI
+        # doesn't need to call get_medication_by_name separately, reducing latency
         prescription_info_list = []
         for prescription in prescriptions:
             medication = db_manager.get_medication_by_id(prescription.medication_id)
@@ -958,6 +989,11 @@ def get_authenticated_user_info(username: str, password: str, authenticated_user
                     medication_id=prescription.medication_id,
                     medication_name_he=medication.name_he,
                     medication_name_en=medication.name_en,
+                    active_ingredients=medication.active_ingredients,
+                    dosage_forms=medication.dosage_forms,
+                    dosage_instructions=medication.dosage_instructions,
+                    usage_instructions=medication.usage_instructions,
+                    description=medication.description,
                     prescribed_by=prescription.prescribed_by,
                     prescription_date=prescription.prescription_date,
                     expiry_date=prescription.expiry_date,
@@ -974,6 +1010,11 @@ def get_authenticated_user_info(username: str, password: str, authenticated_user
                     medication_id=prescription.medication_id,
                     medication_name_he="Unknown",
                     medication_name_en="Unknown",
+                    active_ingredients=[],
+                    dosage_forms=[],
+                    dosage_instructions=None,
+                    usage_instructions=None,
+                    description=None,
                     prescribed_by=prescription.prescribed_by,
                     prescription_date=prescription.prescription_date,
                     expiry_date=prescription.expiry_date,

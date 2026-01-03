@@ -416,6 +416,10 @@ def execute_tool(
         
         # For get_authenticated_user_info, add authenticated_username, authenticated_password, and authenticated_password_hash from context if available
         if tool_name == "get_authenticated_user_info" and context:
+            # If username is not provided by LLM, use it from context
+            if "username" not in filtered_arguments and "authenticated_username" in context and "username" in valid_params:
+                filtered_arguments["username"] = context.get("authenticated_username")
+                logger.debug(f"Added authenticated_username as username to {tool_name}")
             if "authenticated_username" in context and "authenticated_username" in valid_params:
                 filtered_arguments["authenticated_username"] = context.get("authenticated_username")
                 logger.debug(f"Added authenticated_username to {tool_name}")

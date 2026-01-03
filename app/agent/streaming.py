@@ -22,6 +22,7 @@ import json
 import logging
 import concurrent.futures
 import re
+import time
 from typing import List, Dict, Any, Optional, Generator, Tuple
 from openai import OpenAI
 import httpx
@@ -30,6 +31,25 @@ from app.prompts.system_prompt import get_system_prompt
 from app.tools.registry import get_tools_for_openai, execute_tool
 from app.security.audit_logger import AuditLogger
 from app.security.correlation import generate_correlation_id
+
+# #region agent log
+DEBUG_LOG_PATH = r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log"
+def _debug_log(location: str, message: str, data: dict = None, hypothesis_id: str = None):
+    try:
+        log_entry = {
+            "sessionId": "debug-session",
+            "runId": "initial",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time.time() * 1000)
+        }
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+# #endregion
 
 # Load environment variables
 load_dotenv()
@@ -40,12 +60,20 @@ logger = logging.getLogger(__name__)
 # Module-level audit logger instance
 _audit_logger = AuditLogger()
 
-# Shared HTTP client with connection pooling for improved performance
+# Shared HTTP client with optimized connection pooling for improved performance
+# Using HTTP/1.1 instead of HTTP/2 for better compatibility and faster initial connection
+# HTTP/2 can have slower initial connection setup, which is causing 30-40s delays
 _http_client = httpx.Client(
-    http2=True,  # HTTP/2 for faster streaming
+    http2=False,  # Disable HTTP/2 to avoid slow initial connection setup
     limits=httpx.Limits(
-        max_keepalive_connections=10,
-        max_connections=20
+        max_keepalive_connections=20,  # Increased for better connection reuse
+        max_connections=50  # Increased connection pool size
+    ),
+    timeout=httpx.Timeout(
+        connect=5.0,   # Faster connection timeout (fail fast if can't connect)
+        read=120.0,    # Longer read timeout for streaming
+        write=10.0,    # Write timeout
+        pool=10.0      # Connection pool timeout
     )
 )
 
@@ -99,28 +127,57 @@ class StreamingAgent:
         Raises:
             ValueError: If OPENAI_API_KEY is not found in environment
         """
+        # #region agent log
+        init_start = time.time()
+        _debug_log("app/agent/streaming.py:__init__:entry", "StreamingAgent.__init__ started", {"model": model}, "H2")
+        # #endregion
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             error_msg = "OPENAI_API_KEY not found in environment variables"
             logger.error(error_msg)
             raise ValueError(error_msg)
         
-        # Configure OpenAI client with timeout and connection pooling for improved streaming performance
+        # Configure OpenAI client with optimized timeout settings
+        # Using the shared HTTP client with optimized connection pooling
+        # #region agent log
+        client_start = time.time()
+        # #endregion
         self.client = OpenAI(
             api_key=api_key,
-            http_client=_http_client,
+            http_client=_http_client,  # Use shared optimized HTTP client
             timeout=httpx.Timeout(
-                connect=10.0,      # Maximum connection time
-                read=60.0,         # Maximum read time (for streaming)
-                write=10.0,        # Maximum write time
-                pool=5.0           # Connection pool timeout
+                connect=5.0,       # Faster connection timeout (fail fast)
+                read=120.0,       # Longer read timeout for streaming responses
+                write=10.0,        # Write timeout
+                pool=10.0         # Connection pool timeout
             ),
-            max_retries=2          # Number of retries on failure
+            max_retries=1          # Reduced retries to fail faster and avoid long delays
         )
+        # #region agent log
+        _debug_log("app/agent/streaming.py:__init__:client_created", "OpenAI client created", {"duration_ms": (time.time() - client_start) * 1000}, "H2")
+        # #endregion
+        
+        # #region agent log
+        prompt_start = time.time()
+        # #endregion
         self.system_prompt = get_system_prompt()
+        # #region agent log
+        _debug_log("app/agent/streaming.py:__init__:prompt_loaded", "System prompt loaded", {"duration_ms": (time.time() - prompt_start) * 1000, "prompt_length": len(self.system_prompt)}, "H2")
+        # #endregion
+        
+        # #region agent log
+        tools_start = time.time()
+        # #endregion
         self.tools = get_tools_for_openai()
+        # #region agent log
+        _debug_log("app/agent/streaming.py:__init__:tools_loaded", "Tools loaded", {"duration_ms": (time.time() - tools_start) * 1000, "tools_count": len(self.tools)}, "H3")
+        # #endregion
+        
         self.model = model
         
+        # #region agent log
+        _debug_log("app/agent/streaming.py:__init__:complete", "StreamingAgent.__init__ complete", {"total_duration_ms": (time.time() - init_start) * 1000}, "H2")
+        # #endregion
         logger.info(f"StreamingAgent initialized with model: {model}")
         logger.debug(f"Loaded {len(self.tools)} tools for function calling")
     
@@ -697,6 +754,11 @@ class StreamingAgent:
             >>> for chunk in agent.stream_response("Tell me about Acamol"):
             ...     print(chunk, end="", flush=True)
         """
+        # #region agent log
+        stream_start = time.time()
+        _debug_log("app/agent/streaming.py:stream_response:entry", "stream_response started", {"message_length": len(user_message), "history_length": len(conversation_history) if conversation_history else 0}, "H1")
+        # #endregion
+        
         # Generate correlation ID for this request
         correlation_id = generate_correlation_id()
         effective_agent_id = agent_id if agent_id is not None else "default"
@@ -723,7 +785,13 @@ class StreamingAgent:
             return
         
         # Normalize input to handle repetitive content
+        # #region agent log
+        normalize_start = time.time()
+        # #endregion
         normalized_message, was_cleaned = self._normalize_input(user_message)
+        # #region agent log
+        _debug_log("app/agent/streaming.py:stream_response:normalize", "Input normalized", {"duration_ms": (time.time() - normalize_start) * 1000, "was_cleaned": was_cleaned}, "H5")
+        # #endregion
         if was_cleaned:
             logger.info("Input was normalized (repetitive content detected or length limited)")
             _audit_logger.log_agent_action(
@@ -736,10 +804,22 @@ class StreamingAgent:
             # Note: We don't yield a message to user about cleaning to avoid interrupting flow
         
         # Extract context information from history
+        # #region agent log
+        context_start = time.time()
+        # #endregion
         context_info = self._extract_context_info(conversation_history)
+        # #region agent log
+        _debug_log("app/agent/streaming.py:stream_response:context_extracted", "Context extracted", {"duration_ms": (time.time() - context_start) * 1000}, "H5")
+        # #endregion
         
         # Build messages with optimized history and context
+        # #region agent log
+        build_start = time.time()
+        # #endregion
         messages = self._build_messages(normalized_message, conversation_history, context_info)
+        # #region agent log
+        _debug_log("app/agent/streaming.py:stream_response:messages_built", "Messages built", {"duration_ms": (time.time() - build_start) * 1000, "messages_count": len(messages)}, "H5")
+        # #endregion
         max_iterations = 10  # Prevent infinite loops
         iteration = 0
         
@@ -766,6 +846,10 @@ class StreamingAgent:
             
             try:
                 # Call OpenAI API with streaming enabled
+                # #region agent log
+                api_call_start = time.time()
+                _debug_log("app/agent/streaming.py:stream_response:api_call_start", "OpenAI API call starting", {"iteration": iteration, "messages_count": len(messages)}, "H4")
+                # #endregion
                 stream = self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
@@ -773,13 +857,27 @@ class StreamingAgent:
                     tool_choice="auto",  # Let model decide when to use tools
                     stream=True  # Enable streaming
                 )
+                # #region agent log
+                _debug_log("app/agent/streaming.py:stream_response:api_call_connected", "OpenAI API stream connected", {"duration_ms": (time.time() - api_call_start) * 1000}, "H4")
+                # #endregion
                 
                 # Collect response chunks and tool calls
                 accumulated_content = ""
                 tool_calls_collected = []
                 finish_reason = None
+                first_chunk_time = None
+                chunk_count = 0
                 
+                # #region agent log
+                stream_processing_start = time.time()
+                # #endregion
                 for chunk in stream:
+                    if first_chunk_time is None:
+                        first_chunk_time = time.time()
+                        # #region agent log
+                        _debug_log("app/agent/streaming.py:stream_response:first_chunk", "First chunk received", {"time_to_first_chunk_ms": (first_chunk_time - api_call_start) * 1000}, "H4")
+                        # #endregion
+                    chunk_count += 1
                     delta = chunk.choices[0].delta
                     
                     # Check for finish reason
@@ -825,8 +923,16 @@ class StreamingAgent:
                             # Skip tool call processing for this chunk
                             pass
                 
+                # #region agent log
+                _debug_log("app/agent/streaming.py:stream_response:stream_complete", "Stream processing complete", {"duration_ms": (time.time() - stream_processing_start) * 1000, "chunk_count": chunk_count, "content_length": len(accumulated_content)}, "H4")
+                # #endregion
+                
                 # After stream completes, check if we need to handle tool calls
                 if finish_reason == "tool_calls" and tool_calls_collected:
+                    # #region agent log
+                    tool_exec_start = time.time()
+                    _debug_log("app/agent/streaming.py:stream_response:tool_exec_start", "Tool execution starting", {"tool_calls_count": len(tool_calls_collected)}, "H6")
+                    # #endregion
                     # Add accumulated content to assistant message if any
                     if accumulated_content:
                         assistant_msg_dict = {
@@ -865,6 +971,9 @@ class StreamingAgent:
                         context=context,
                         tool_call_cache=tool_call_cache
                     )
+                    # #region agent log
+                    _debug_log("app/agent/streaming.py:stream_response:tool_exec_complete", "Tool execution complete", {"duration_ms": (time.time() - tool_exec_start) * 1000, "tool_messages_count": len(tool_messages)}, "H6")
+                    # #endregion
                     
                     # Check for authentication errors in tool results
                     current_auth_errors = []

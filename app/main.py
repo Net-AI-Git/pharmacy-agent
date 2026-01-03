@@ -138,20 +138,22 @@ def get_agent_instance() -> StreamingAgent:
 # Initialize agent when module is imported
 # This ensures the agent is ready when the Gradio interface is created
 # #region agent log
+import time
+agent_init_start = time.time()
 _debug_log("app/main.py:119", "Starting agent initialization", {}, "H2")
 # #endregion
 try:
     agent = get_agent_instance()
-    logger.info("Main application: StreamingAgent instance created and ready")
     # #region agent log
-    _debug_log("app/main.py:122", "Agent initialized successfully", {"agent_is_none": agent is None}, "H2")
+    _debug_log("app/main.py:122", "Agent initialized successfully", {"agent_is_none": agent is None, "duration_ms": (time.time() - agent_init_start) * 1000}, "H2")
     # #endregion
+    logger.info("Main application: StreamingAgent instance created and ready")
 except Exception as e:
     logger.error(f"Main application: Failed to initialize agent: {str(e)}", exc_info=True)
     # Set agent to None so the application can handle the error gracefully
     agent = None
     # #region agent log
-    _debug_log("app/main.py:125", "Agent initialization failed", {"error": str(e), "error_type": type(e).__name__}, "H2")
+    _debug_log("app/main.py:125", "Agent initialization failed", {"error": str(e), "error_type": type(e).__name__, "duration_ms": (time.time() - agent_init_start) * 1000}, "H2")
     # #endregion
 
 
@@ -257,6 +259,7 @@ def chat_fn(
     history: List[Tuple[str, str]],
     authenticated_user_id: Optional[str] = None,
     authenticated_username: Optional[str] = None,
+    authenticated_password: Optional[str] = None,
     authenticated_password_hash: Optional[str] = None
 ) -> Generator[Tuple[str, str], None, None]:
     """
@@ -342,6 +345,8 @@ def chat_fn(
             context["authenticated_user_id"] = authenticated_user_id
             if authenticated_username:
                 context["authenticated_username"] = authenticated_username
+            if authenticated_password:
+                context["authenticated_password"] = authenticated_password
             if authenticated_password_hash:
                 context["authenticated_password_hash"] = authenticated_password_hash
             logger.debug(f"Passing authenticated_user_id to agent: {authenticated_user_id}")
@@ -677,6 +682,7 @@ def create_chat_interface() -> gr.Blocks:
         # Session state for authentication
         authenticated_user = gr.State(value=None)  # Stores user_id when authenticated
         authenticated_username = gr.State(value=None)  # Stores username when authenticated
+        authenticated_password = gr.State(value=None)  # Stores password when authenticated (for tool calls)
         authenticated_password_hash = gr.State(value=None)  # Stores password_hash when authenticated
         
         # Authentication section
@@ -819,7 +825,7 @@ def create_chat_interface() -> gr.Blocks:
                 return True
             return hash_password(password) == password_hash
         
-        def authenticate_user(name_or_email: str, password: str, current_user: Optional[str], current_username: Optional[str] = None, current_password_hash: Optional[str] = None) -> Tuple[Optional[str], Optional[str], Optional[str], str]:
+        def authenticate_user(name_or_email: str, password: str, current_user: Optional[str], current_username: Optional[str] = None, current_password: Optional[str] = None, current_password_hash: Optional[str] = None) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str], str]:
             """
             Authenticate user by name or email and password.
             
@@ -828,16 +834,17 @@ def create_chat_interface() -> gr.Blocks:
                 password: User password for authentication
                 current_user: Currently authenticated user_id (if any)
                 current_username: Currently authenticated username (if any)
+                current_password: Currently authenticated password (if any)
                 current_password_hash: Currently authenticated password_hash (if any)
             
             Returns:
-                Tuple of (user_id, username, password_hash, status_message)
+                Tuple of (user_id, username, password, password_hash, status_message)
             """
             if not name_or_email or not name_or_email.strip():
-                return current_user, current_username, current_password_hash, "**Status:** Not authenticated | לא מזוהה - Please enter your name or email"
+                return current_user, current_username, current_password, current_password_hash, "**Status:** Not authenticated | לא מזוהה - Please enter your name or email"
             
             if not password or not password.strip():
-                return current_user, current_username, current_password_hash, "**Status:** Not authenticated | לא מזוהה - Please enter your password"
+                return current_user, current_username, current_password, current_password_hash, "**Status:** Not authenticated | לא מזוהה - Please enter your password"
             
             try:
                 from app.tools.user_tools import get_user_by_name_or_email
@@ -846,50 +853,52 @@ def create_chat_interface() -> gr.Blocks:
                 result = get_user_by_name_or_email(name_or_email.strip())
                 
                 if "error" in result:
-                    return current_user, current_username, current_password_hash, f"**Status:** Authentication failed | הזדהות נכשלה - {result.get('error', 'User not found')}"
+                    return current_user, current_username, current_password, current_password_hash, f"**Status:** Authentication failed | הזדהות נכשלה - {result.get('error', 'User not found')}"
                 
                 user_id = result.get("user_id")
                 if not user_id:
-                    return current_user, current_username, current_password_hash, "**Status:** Authentication failed | הזדהות נכשלה - User not found"
+                    return current_user, current_username, current_password, current_password_hash, "**Status:** Authentication failed | הזדהות נכשלה - User not found"
                 
                 # Verify password
                 db_manager = DatabaseManager()
                 user = db_manager.get_user_by_id(user_id)
                 if not user:
-                    return current_user, current_username, current_password_hash, "**Status:** Authentication failed | הזדהות נכשלה - User not found"
+                    return current_user, current_username, current_password, current_password_hash, "**Status:** Authentication failed | הזדהות נכשלה - User not found"
                 
                 # Check password
                 if not verify_password(password.strip(), user.password_hash):
                     logger.warning(f"Authentication failed for user: {user_id} - incorrect password")
-                    return current_user, current_username, current_password_hash, "**Status:** Authentication failed | הזדהות נכשלה - Incorrect password"
+                    return current_user, current_username, current_password, current_password_hash, "**Status:** Authentication failed | הזדהות נכשלה - Incorrect password"
                 
                 user_name = result.get("name", "Unknown")
-                # Store username and password hash for authenticated user
+                # Store username, password, and password hash for authenticated user
                 username_to_store = name_or_email.strip()
+                password_to_store = password.strip()  # Store password for tool calls
                 password_hash_to_store = hash_password(password.strip())
                 
-                logger.info(f"User authenticated: {user_id} ({user_name}), storing username and password_hash")
-                return user_id, username_to_store, password_hash_to_store, f"**Status:** ✅ Authenticated as {user_name} ({user_id}) | מזוהה כ-{user_name}"
+                logger.info(f"User authenticated: {user_id} ({user_name}), storing username, password, and password_hash")
+                return user_id, username_to_store, password_to_store, password_hash_to_store, f"**Status:** ✅ Authenticated as {user_name} ({user_id}) | מזוהה כ-{user_name}"
             except Exception as e:
                 logger.error(f"Authentication error: {str(e)}", exc_info=True)
-                return current_user, current_username, current_password_hash, f"**Status:** Authentication error | שגיאת הזדהות - {str(e)}"
+                return current_user, current_username, current_password, current_password_hash, f"**Status:** Authentication error | שגיאת הזדהות - {str(e)}"
         
-        def logout_user(current_user: Optional[str], current_username: Optional[str] = None, current_password_hash: Optional[str] = None) -> Tuple[None, None, None, str]:
+        def logout_user(current_user: Optional[str], current_username: Optional[str] = None, current_password: Optional[str] = None, current_password_hash: Optional[str] = None) -> Tuple[None, None, None, None, str]:
             """
             Logout current user.
             
             Args:
                 current_user: Currently authenticated user_id (if any)
                 current_username: Currently authenticated username (if any)
+                current_password: Currently authenticated password (if any)
                 current_password_hash: Currently authenticated password_hash (if any)
             
             Returns:
-                Tuple of (None, None, None, status_message)
+                Tuple of (None, None, None, None, status_message)
             """
             logger.info(f"User logged out: {current_user}")
-            return None, None, None, "**Status:** Not authenticated | לא מזוהה"
+            return None, None, None, None, "**Status:** Not authenticated | לא מזוהה"
         
-        def respond(message: str, history: List[Dict[str, str]], authenticated_user_id: Optional[str] = None, authenticated_username: Optional[str] = None, authenticated_password_hash: Optional[str] = None) -> Generator[Tuple[List[Dict[str, str]], Any], None, None]:
+        def respond(message: str, history: List[Dict[str, str]], authenticated_user_id: Optional[str] = None, authenticated_username: Optional[str] = None, authenticated_password: Optional[str] = None, authenticated_password_hash: Optional[str] = None) -> Generator[Tuple[List[Dict[str, str]], Any], None, None]:
             """
             Handle user message and update chat history with tool calls (streaming).
             
@@ -1026,7 +1035,7 @@ def create_chat_interface() -> gr.Blocks:
                 
                 # Stream response chunks in real-time
                 # Each yield updates the UI immediately, providing true streaming experience
-                for chunk, tool_calls_json in chat_fn(enhanced_message, tuple_history, authenticated_user_id, authenticated_username, authenticated_password_hash):
+                for chunk, tool_calls_json in chat_fn(enhanced_message, tuple_history, authenticated_user_id, authenticated_username, authenticated_password, authenticated_password_hash):
                     # Accumulate text chunks for complete response
                     response_text += chunk
                     
@@ -1121,7 +1130,7 @@ def create_chat_interface() -> gr.Blocks:
                 _debug_log("app/main.py:respond:exception", "Exception in respond function", {"error": str(e), "error_type": str(type(e))}, "H1")
                 # #endregion
                 logger.error(f"Error in respond function: {str(e)}", exc_info=True)
-                # Return error state with valid types - ensure history format is correct (dict format)
+                # Build error history with error message - ensure streaming behavior
                 error_history = []
                 if history:
                     for entry in history:
@@ -1138,6 +1147,12 @@ def create_chat_interface() -> gr.Blocks:
                                 error_history.append({"role": "user", "content": user_msg})
                             if assistant_msg:
                                 error_history.append({"role": "assistant", "content": assistant_msg})
+                
+                # Add current user message and error response for streaming display
+                error_message = "I apologize, but I encountered an error processing your request. Please try again."
+                error_history.append({"role": "user", "content": message})
+                # Yield error message with streaming (yield ensures it's streamed, not returned)
+                error_history.append({"role": "assistant", "content": error_message})
                 yield error_history, {}
         
         def clear_chat() -> Tuple[List[Dict[str, str]], dict]:
@@ -1150,8 +1165,8 @@ def create_chat_interface() -> gr.Blocks:
         # Connect authentication components
         login_btn.click(
             authenticate_user,
-            inputs=[auth_input, auth_password, authenticated_user, authenticated_username, authenticated_password_hash],
-            outputs=[authenticated_user, authenticated_username, authenticated_password_hash, auth_status]
+            inputs=[auth_input, auth_password, authenticated_user, authenticated_username, authenticated_password, authenticated_password_hash],
+            outputs=[authenticated_user, authenticated_username, authenticated_password, authenticated_password_hash, auth_status]
         ).then(
             lambda: ("", ""),  # Clear auth inputs after login
             outputs=[auth_input, auth_password]
@@ -1159,8 +1174,8 @@ def create_chat_interface() -> gr.Blocks:
         
         logout_btn.click(
             logout_user,
-            inputs=[authenticated_user, authenticated_username, authenticated_password_hash],
-            outputs=[authenticated_user, authenticated_username, authenticated_password_hash, auth_status]
+            inputs=[authenticated_user, authenticated_username, authenticated_password, authenticated_password_hash],
+            outputs=[authenticated_user, authenticated_username, authenticated_password, authenticated_password_hash, auth_status]
         )
         
         # Connect components with streaming support
@@ -1171,7 +1186,7 @@ def create_chat_interface() -> gr.Blocks:
         # #endregion
         msg.submit(
             respond,
-            inputs=[msg, chatbot, authenticated_user, authenticated_username, authenticated_password_hash],
+            inputs=[msg, chatbot, authenticated_user, authenticated_username, authenticated_password, authenticated_password_hash],
             outputs=[chatbot, tool_calls_display]
         ).then(
             lambda: "",  # Clear message box after submission
@@ -1180,7 +1195,7 @@ def create_chat_interface() -> gr.Blocks:
         
         submit_btn.click(
             respond,
-            inputs=[msg, chatbot, authenticated_user, authenticated_username, authenticated_password_hash],
+            inputs=[msg, chatbot, authenticated_user, authenticated_username, authenticated_password, authenticated_password_hash],
             outputs=[chatbot, tool_calls_display]
         ).then(
             lambda: "",  # Clear message box after submission

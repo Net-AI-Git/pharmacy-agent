@@ -128,11 +128,12 @@ def get_system_prompt() -> str:
 - **CRITICAL SECURITY RULE:** NEVER search for different user when authenticated_user_id is present. Always verify the name matches before accessing database.
 
 ### get_user_prescriptions(user_id)
-**When:** User asks "What are my prescriptions?" after you have user_id. **Returns:** user_id, user_name, prescriptions list.
+**When:** User asks "What are my prescriptions?" after you have user_id. **Returns:** user_id, user_name, prescriptions list with COMPLETE medication details (names, active_ingredients, dosage_instructions, usage_instructions, description).
 **Critical:** 
 - **SECURITY:** user_id MUST match authenticated_user_id. If different, reject immediately.
 - If message contains "[Authenticated User ID: XXX]", use that user_id directly. Otherwise, call get_user_by_name_or_email FIRST.
 - **NEVER** call this tool with a user_id that doesn't match the authenticated user.
+- **IMPORTANT:** This tool returns COMPLETE medication information. Do NOT call get_medication_by_name after this - all medication details are already included in the prescription results.
 
 ### check_user_prescription_for_medication(user_id, medication_id)
 **When:** User asks "Do I have prescription for X?" after you have both IDs. **Returns:** has_active_prescription, prescription_details.

@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 from app.models.user import User
@@ -8,6 +9,25 @@ from app.models.prescription import Prescription
 
 # Configure module-level logger
 logger = logging.getLogger(__name__)
+
+# #region agent log
+DEBUG_LOG_PATH = r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log"
+def _debug_log(location: str, message: str, data: dict = None, hypothesis_id: str = None):
+    try:
+        log_entry = {
+            "sessionId": "debug-session",
+            "runId": "initial",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time.time() * 1000)
+        }
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+# #endregion
 
 
 class DatabaseManager:
@@ -65,9 +85,19 @@ class DatabaseManager:
             logger.error(f"Database file not found: {self.db_path}")
             raise FileNotFoundError(f"Database file not found: {self.db_path}")
         
+        # #region agent log
+        load_start = time.time()
+        _debug_log("app/database/db.py:load_db:start", "Database load started", {"db_path": str(self.db_path)}, "H1")
+        # #endregion
+        
         logger.debug(f"Loading database from: {self.db_path}")
         with open(self.db_path, 'r', encoding='utf-8') as f:
             self._data = json.load(f)
+        
+        # #region agent log
+        load_duration = (time.time() - load_start) * 1000
+        _debug_log("app/database/db.py:load_db:complete", "Database load complete", {"duration_ms": load_duration}, "H1")
+        # #endregion
         
         user_count = len(self._data.get("users", []))
         med_count = len(self._data.get("medications", []))
