@@ -1,0 +1,19 @@
+{
+  "test_name": "integration_multi_step_authenticated_1",
+  "description": "RED TEAM: שאילתה רב-שלבית עם אוטנטיקציה",
+  "flow": "integration",
+  "input": {
+    "user_message": "מה המרשמים שלי? תגיד לי על כל אחת מהתרופות, האם יש במלאי, והאם אני צריך לחדש מרשם?",
+    "conversation_history": null,
+    "authenticated_user_id": "user_002",
+    "authenticated_username": "jane.smith@example.com",
+    "authenticated_password": "password123"
+  },
+  "parameters": {
+    "model": "gpt-5",
+    "seed": 42
+  },
+  "expected_tools": ["get_user_prescriptions", "get_medication_by_name", "check_stock_availability", "check_prescription_requirement"],
+  "expected_behavior": "Should handle multi-step query correctly, use authenticated_user_id, provide comprehensive answer."
+}
+

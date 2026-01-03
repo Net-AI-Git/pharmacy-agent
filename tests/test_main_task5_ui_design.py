@@ -38,15 +38,19 @@ class TestUITitle:
         """
         # Arrange & Act
         from app.main import create_chat_interface
-        interface = create_chat_interface()
+        result = create_chat_interface()
         
         # Assert
-        assert interface is not None, \
+        assert result is not None, \
             f"{FAIL} Expected interface to be created, got None"
-        # Gradio Blocks title is set in constructor
-        # We verify the interface was created with title parameter
-        assert isinstance(interface, gr.Blocks), \
-            f"{FAIL} Expected gr.Blocks instance, got {type(interface)}"
+        # create_chat_interface returns a tuple (app, theme, css) in newer versions
+        if isinstance(result, tuple):
+            interface, theme, css = result
+            assert isinstance(interface, gr.Blocks), \
+                f"{FAIL} Expected gr.Blocks instance in tuple, got {type(interface)}"
+        else:
+            assert isinstance(result, gr.Blocks), \
+                f"{FAIL} Expected gr.Blocks instance, got {type(result)}"
         print(f"{PASS} Interface has title configured")
     
     def test_title_is_pharmacy_ai_assistant(self):
@@ -180,15 +184,21 @@ class TestUITheme:
         """
         # Arrange & Act
         from app.main import create_chat_interface
-        interface = create_chat_interface()
+        result = create_chat_interface()
         
         # Assert
         # Theme is set in constructor: gr.Blocks(theme=gr.themes.Soft())
         # We verify the interface was created successfully
-        assert interface is not None, \
+        assert result is not None, \
             f"{FAIL} Expected interface to be created, got None"
-        assert isinstance(interface, gr.Blocks), \
-            f"{FAIL} Expected gr.Blocks instance, got {type(interface)}"
+        # create_chat_interface returns a tuple (app, theme, css) in newer versions
+        if isinstance(result, tuple):
+            interface, theme, css = result
+            assert isinstance(interface, gr.Blocks), \
+                f"{FAIL} Expected gr.Blocks instance in tuple, got {type(interface)}"
+        else:
+            assert isinstance(result, gr.Blocks), \
+                f"{FAIL} Expected gr.Blocks instance, got {type(result)}"
         print(f"{PASS} Interface uses Soft theme")
     
     def test_theme_provides_professional_appearance(self):

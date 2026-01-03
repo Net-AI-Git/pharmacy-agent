@@ -40,11 +40,11 @@ class TestRegistry:
     
     def test_get_tools_for_openai_returns_three_tools(self):
         """
-        Test that get_tools_for_openai returns exactly 3 tools.
+        Test that get_tools_for_openai returns exactly 6 tools.
         
         Arrange: No setup needed
         Act: Call get_tools_for_openai
-        Assert: Returns list with 3 tools
+        Assert: Returns list with 6 tools (3 medication/inventory/prescription + 3 user tools)
         """
         # Arrange
         # No setup needed
@@ -53,7 +53,8 @@ class TestRegistry:
         tools = get_tools_for_openai()
         
         # Assert
-        assert len(tools) == 3, f"Expected 3 tools, got {len(tools)}"
+        # Note: Registry now includes 7 tools (3 medication/inventory/prescription + 4 user tools)
+        assert len(tools) == 7, f"Expected 7 tools, got {len(tools)}"
     
     def test_get_tools_for_openai_contains_medication_tool(self):
         """
@@ -411,7 +412,8 @@ class TestRegistry:
         # Assert
         assert len(tools1) == len(tools2), \
             f"Expected same number of tools, got {len(tools1)} vs {len(tools2)}"
-        assert len(tools1) == 3, f"Expected 3 tools, got {len(tools1)}"
+        # Note: Registry now includes 7 tools (3 medication/inventory/prescription + 4 user tools)
+        assert len(tools1) == 7, f"Expected 7 tools, got {len(tools1)}"
         
         # Check that tool names are consistent
         names1 = [tool["function"]["name"] for tool in tools1]

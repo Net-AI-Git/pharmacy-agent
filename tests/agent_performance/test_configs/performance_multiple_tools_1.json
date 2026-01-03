@@ -1,0 +1,16 @@
+{
+  "test_name": "performance_multiple_tools_1",
+  "description": "RED TEAM: שאילתה מורכבת עם מספר כלים - בדיקת ביצועים",
+  "flow": "performance",
+  "input": {
+    "user_message": "תגיד לי על אקמול, אספירין, איבופרופן, אמוקסיצילין ומטפורמין. האם יש במלאי? האם דורשים מרשם? מה המינונים?",
+    "conversation_history": null
+  },
+  "parameters": {
+    "model": "gpt-5",
+    "seed": 42
+  },
+  "expected_tools": ["get_medication_by_name", "check_stock_availability", "check_prescription_requirement"],
+  "expected_behavior": "Should handle multiple medications efficiently, use tools correctly, provide comprehensive answer."
+}
+

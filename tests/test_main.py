@@ -419,8 +419,14 @@ class TestCreateChatInterface:
         
         # Assert
         assert result is not None, "Expected Blocks interface to be created"
-        assert isinstance(result, gr.Blocks), \
-            f"Expected gr.Blocks instance, got {type(result)}"
+        # create_chat_interface returns a tuple (app, theme, css) in newer versions
+        if isinstance(result, tuple):
+            app, theme, css = result
+            assert isinstance(app, gr.Blocks), \
+                f"Expected gr.Blocks instance in tuple, got {type(app)}"
+        else:
+            assert isinstance(result, gr.Blocks), \
+                f"Expected gr.Blocks instance, got {type(result)}"
     
     def test_create_chat_interface_has_correct_title(self):
         """

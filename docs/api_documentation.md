@@ -330,23 +330,15 @@ Check prescription requirement for a medication by ID. Verifies whether medicati
 }
 ```
 
-**Example:**
-```json
-{
-  "medication_id": "med_001",
-  "medication_name": "אקמול",
-  "requires_prescription": false,
-  "prescription_type": "not_required"
-}
-```
-
 ### Success Response (Prescription Required)
 
-**Example:**
+**Status:** 200 OK
+
+**Schema:**
 ```json
 {
-  "medication_id": "med_003",
-  "medication_name": "Amoxicillin",
+  "medication_id": "string",
+  "medication_name": "string",
   "requires_prescription": true,
   "prescription_type": "prescription_required"
 }
@@ -354,7 +346,7 @@ Check prescription requirement for a medication by ID. Verifies whether medicati
 
 ### Error Response
 
-**Status:** 404 Not Found
+**Status:** Error (but returns structured error)
 
 **Schema:**
 ```json
@@ -366,47 +358,247 @@ Check prescription requirement for a medication by ID. Verifies whether medicati
 }
 ```
 
-**Example:**
+**Notes:**
+- **Safe Fallback**: On errors, always returns `requires_prescription=true` (safe default)
+- **Prescription Type**: Either "not_required" or "prescription_required"
+
+---
+
+## Tool 4: get_user_by_name_or_email
+
+### Purpose
+Search for a user by name or email address with case-insensitive partial matching support. Enables users to identify themselves naturally without requiring technical user IDs.
+
+### OpenAI Function Schema
+
 ```json
 {
-  "error": "Medication not found: med_999. Please verify the medication ID.",
-  "medication_id": "med_999",
-  "requires_prescription": true,
-  "prescription_type": "prescription_required"
+  "type": "function",
+  "function": {
+    "name": "get_user_by_name_or_email",
+    "description": "Search for a user by name or email address with case-insensitive partial matching support. This tool enables the AI agent to find users when they provide their name or email address instead of user_id. It supports natural language queries where users identify themselves by name or email, which is more user-friendly than requiring technical IDs. Returns user information including user_id (required for other user tools), name, email, and list of prescription IDs. If multiple users match, returns the first match. If no user is found, returns error with suggestions of similar names or emails.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "name_or_email": {
+          "type": "string",
+          "description": "The user name or email address to search for. Supports partial matches and case-insensitive search. Examples: 'John Doe', 'john.doe@example.com', 'john'"
+        }
+      },
+      "required": ["name_or_email"]
+    }
+  }
 }
 ```
 
-### Example Requests
+### Input Parameters
 
-**Request 1: Check prescription requirement**
-```python
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `name_or_email` | string | Yes | The user name or email address to search for |
+
+### Success Response
+
+**Status:** 200 OK
+
+**Schema:**
+```json
 {
-  "medication_id": "med_001"
+  "user_id": "string",
+  "name": "string",
+  "email": "string",
+  "prescriptions": ["string"]
 }
 ```
 
-**Request 2: Check for prescription medication**
-```python
+### Error Response
+
+**Status:** Error (but returns structured error)
+
+**Schema:**
+```json
 {
-  "medication_id": "med_003"
+  "error": "string",
+  "searched_name_or_email": "string",
+  "suggestions": ["string"]
 }
 ```
 
-### Error Codes
+**Notes:**
+- **Case-Insensitive**: Search works regardless of case
+- **Partial Matching**: Supports partial name/email matches
+- **Multiple Results**: If multiple users match, returns first match
+- **Suggestions**: Error response includes suggestions for similar names/emails
 
-| Code | Description | Solution |
-|------|-------------|----------|
-| 400 | Invalid parameters (empty medication_id) | Provide a non-empty medication_id |
-| 404 | Medication not found | Verify the medication_id is correct |
-| 500 | Internal server error | Check logs for details |
+---
 
-### Notes
+## Tool 5: get_user_prescriptions
 
-- **Safety First**: On errors, always returns `requires_prescription=true` and `prescription_type="prescription_required"` (safe default)
-- **Prescription Types**: 
-  - `"not_required"`: Over-the-counter medication
-  - `"prescription_required"`: Requires doctor's prescription
-- **Compliance**: This tool is critical for pharmacy regulatory compliance
+### Purpose
+Get all prescriptions for a specific user by user_id. Returns complete prescription information including medication names, dates, quantities, refills, and status.
+
+### OpenAI Function Schema
+
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "get_user_prescriptions",
+    "description": "Get all prescriptions for a specific user by user_id. This tool enables the AI agent to retrieve all prescriptions associated with a user. This allows users to view their prescription history and verify prescription details. Returns complete prescription information including medication names (Hebrew and English), prescription dates, expiry dates, quantities, refills remaining, and status. Returns empty list if user has no prescriptions (this is not an error). The user_id is typically obtained from get_user_by_name_or_email.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "description": "The unique identifier of the user to get prescriptions for. This is typically obtained from get_user_by_name_or_email. Example: 'user_001'"
+        }
+      },
+      "required": ["user_id"]
+    }
+  }
+}
+```
+
+### Input Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `user_id` | string | Yes | The unique identifier of the user to get prescriptions for |
+
+### Success Response
+
+**Status:** 200 OK
+
+**Schema:**
+```json
+{
+  "user_id": "string",
+  "user_name": "string",
+  "prescriptions": [
+    {
+      "prescription_id": "string",
+      "medication_id": "string",
+      "medication_name_he": "string",
+      "medication_name_en": "string",
+      "prescribed_by": "string",
+      "prescription_date": "string",
+      "expiry_date": "string",
+      "quantity": number,
+      "refills_remaining": number,
+      "status": "string"
+    }
+  ]
+}
+```
+
+### Error Response
+
+**Status:** Error (but returns structured error)
+
+**Schema:**
+```json
+{
+  "error": "string",
+  "success": false
+}
+```
+
+**Notes:**
+- **Empty List**: If user has no prescriptions, returns empty list (not an error)
+- **Medication Names**: Includes both Hebrew and English medication names
+- **Status Values**: "active", "expired", "cancelled", or "completed"
+
+---
+
+## Tool 6: check_user_prescription_for_medication
+
+### Purpose
+Check if a user has an active prescription for a specific medication. Only returns active prescriptions (status="active").
+
+### OpenAI Function Schema
+
+```json
+{
+  "type": "function",
+  "function": {
+    "name": "check_user_prescription_for_medication",
+    "description": "Check if a user has an active prescription for a specific medication. This tool enables the AI agent to verify whether a user has an active prescription for a specific medication. This is essential for prescription validation before medication purchases and helps users understand their prescription status. Only returns active prescriptions (status='active'). Returns has_active_prescription=false if no active prescription found (this is not an error). The user_id is typically obtained from get_user_by_name_or_email, and medication_id is typically obtained from get_medication_by_name.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "description": "The unique identifier of the user to check prescription for. This is typically obtained from get_user_by_name_or_email. Example: 'user_001'"
+        },
+        "medication_id": {
+          "type": "string",
+          "description": "The unique identifier of the medication to check prescription for. This is typically obtained from get_medication_by_name. Example: 'med_001'"
+        }
+      },
+      "required": ["user_id", "medication_id"]
+    }
+  }
+}
+```
+
+### Input Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `user_id` | string | Yes | The unique identifier of the user to check prescription for |
+| `medication_id` | string | Yes | The unique identifier of the medication to check prescription for |
+
+### Success Response (Active Prescription Found)
+
+**Status:** 200 OK
+
+**Schema:**
+```json
+{
+  "has_active_prescription": true,
+  "prescription_details": {
+    "prescription_id": "string",
+    "medication_id": "string",
+    "medication_name_he": "string",
+    "medication_name_en": "string",
+    "prescribed_by": "string",
+    "prescription_date": "string",
+    "expiry_date": "string",
+    "quantity": number,
+    "refills_remaining": number,
+    "status": "active"
+  }
+}
+```
+
+### Success Response (No Active Prescription)
+
+**Status:** 200 OK
+
+**Schema:**
+```json
+{
+  "has_active_prescription": false,
+  "prescription_details": null
+}
+```
+
+### Error Response
+
+**Status:** Error (but returns structured error)
+
+**Schema:**
+```json
+{
+  "error": "string",
+  "success": false
+}
+```
+
+**Notes:**
+- **Active Only**: Only returns prescriptions with status="active"
+- **No Prescription**: Returns has_active_prescription=false if no active prescription (not an error)
+- **Both Required**: Both user_id and medication_id are required
 
 ---
 

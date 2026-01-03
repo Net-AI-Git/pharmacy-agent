@@ -1,0 +1,15 @@
+{
+  "test_name": "edge_case_empty_input_1",
+  "description": "RED TEAM: הודעה ריקה - צריך לטפל בצורה נכונה",
+  "flow": "edge_cases",
+  "input": {
+    "user_message": "",
+    "conversation_history": null
+  },
+  "parameters": {
+    "model": "gpt-5",
+    "seed": 42
+  },
+  "expected_behavior": "Should handle empty message gracefully, ask user to provide a question."
+}
+

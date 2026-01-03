@@ -21,7 +21,8 @@ import os
 import json
 import logging
 import concurrent.futures
-from typing import List, Dict, Any, Optional, Generator
+import re
+from typing import List, Dict, Any, Optional, Generator, Tuple
 from openai import OpenAI
 import httpx
 from dotenv import load_dotenv
@@ -123,30 +124,245 @@ class StreamingAgent:
         logger.info(f"StreamingAgent initialized with model: {model}")
         logger.debug(f"Loaded {len(self.tools)} tools for function calling")
     
+    def _normalize_input(self, user_message: str) -> Tuple[str, bool]:
+        """
+        Normalize user input by detecting and cleaning repetitive content.
+        
+        Purpose (Why):
+        Detects repetitive input (same word/phrase repeated many times) and cleans it
+        to reduce token usage and improve processing efficiency. Also limits maximum
+        input length to prevent excessive token consumption.
+        
+        Implementation (What):
+        Checks for repetitive patterns (same word/phrase repeated >10 times), reduces
+        to 1-2 repetitions, limits total length to 2000 characters (500 tokens),
+        and cleans excessive whitespace.
+        
+        Args:
+            user_message: The user's message to normalize
+        
+        Returns:
+            Tuple of (normalized_message, was_cleaned) where:
+            - normalized_message: The cleaned message
+            - was_cleaned: Boolean indicating if any cleaning was performed
+        """
+        if not user_message or not user_message.strip():
+            return user_message, False
+        
+        original_length = len(user_message)
+        cleaned = False
+        normalized = user_message.strip()
+        
+        # Detect repetitive patterns (same word/phrase repeated many times)
+        # Split into words and check for excessive repetition
+        words = normalized.split()
+        if len(words) > 20:  # Only check if message is long enough
+            word_counts = {}
+            for word in words:
+                word_counts[word] = word_counts.get(word, 0) + 1
+            
+            # Find words that appear more than 10 times
+            repetitive_words = {word: count for word, count in word_counts.items() if count > 10}
+            
+            if repetitive_words:
+                # Replace excessive repetitions with 1-2 occurrences
+                for word, count in repetitive_words.items():
+                    # Create pattern to match the word repeated many times
+                    pattern = r'\b' + re.escape(word) + r'\b'
+                    # Replace all occurrences with just 2 occurrences
+                    normalized = re.sub(pattern, word, normalized, count=count-2)
+                    cleaned = True
+                    logger.info(f"Detected repetitive input: '{word}' appeared {count} times, reduced to 2")
+        
+        # Limit maximum length to 2000 characters (approximately 500 tokens)
+        if len(normalized) > 2000:
+            normalized = normalized[:2000] + "..."
+            cleaned = True
+            logger.info(f"Input truncated from {len(user_message)} to 2000 characters")
+        
+        # Clean excessive whitespace
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
+        if len(normalized) != original_length:
+            cleaned = True
+        
+        if cleaned:
+            logger.debug(f"Input normalized: original length {original_length}, normalized length {len(normalized)}")
+        
+        return normalized, cleaned
+    
+    def _optimize_history(
+        self,
+        conversation_history: Optional[List[Dict[str, str]]],
+        max_messages: int = 20,
+        max_tokens: int = 4000
+    ) -> List[Dict[str, str]]:
+        """
+        Optimize conversation history by limiting length and summarizing old messages.
+        
+        Purpose (Why):
+        Reduces token usage by limiting history length and summarizing old messages
+        when history becomes too long. This prevents excessive token consumption
+        while maintaining essential context.
+        
+        Implementation (What):
+        Estimates tokens (4 chars = 1 token), keeps last 10 messages in full,
+        summarizes older messages into a single summary message if history exceeds
+        limits. Prevents duplicate consecutive messages.
+        
+        Args:
+            conversation_history: Optional list of previous messages
+            max_messages: Maximum number of messages to keep (default: 20)
+            max_tokens: Maximum estimated tokens for history (default: 4000)
+        
+        Returns:
+            Optimized list of messages with summary if needed
+        """
+        if not conversation_history:
+            return []
+        
+        # Estimate tokens (rough approximation: 4 characters = 1 token)
+        def estimate_tokens(text: str) -> int:
+            return len(text) // 4
+        
+        # Calculate total tokens
+        total_tokens = sum(estimate_tokens(msg.get("content", "")) for msg in conversation_history)
+        total_messages = len(conversation_history)
+        
+        # If within limits, return as-is (but check for duplicates)
+        if total_messages <= max_messages and total_tokens <= max_tokens:
+            # Remove duplicate consecutive messages
+            optimized = []
+            prev_content = None
+            for msg in conversation_history:
+                content = msg.get("content", "")
+                if content != prev_content:
+                    optimized.append(msg)
+                    prev_content = content
+            return optimized
+        
+        # Need to optimize - keep last 10 messages, summarize older ones
+        keep_count = 10
+        if total_messages <= keep_count:
+            return conversation_history[-keep_count:]
+        
+        # Keep last messages
+        recent_messages = conversation_history[-keep_count:]
+        old_messages = conversation_history[:-keep_count]
+        
+        # Create summary of old messages
+        old_content = " ".join(msg.get("content", "")[:200] for msg in old_messages[:5])  # Sample first 5
+        summary_message = {
+            "role": "system",
+            "content": f"[Previous conversation summary: {len(old_messages)} earlier messages discussing medications and prescriptions]"
+        }
+        
+        # Combine summary + recent messages
+        optimized = [summary_message] + recent_messages
+        
+        logger.info(f"History optimized: {total_messages} messages ({total_tokens} tokens) -> {len(optimized)} messages")
+        
+        return optimized
+    
+    def _extract_context_info(
+        self,
+        conversation_history: Optional[List[Dict[str, str]]]
+    ) -> Dict[str, Any]:
+        """
+        Extract context information (medications, users) from conversation history.
+        
+        Purpose (Why):
+        Identifies medications and users that have already been discussed in the
+        conversation history, allowing the agent to avoid redundant tool calls
+        when information is already available.
+        
+        Implementation (What):
+        Scans history for medication IDs/names and user IDs/names mentioned in
+        tool call results or assistant messages. Returns structured context info.
+        
+        Args:
+            conversation_history: Optional list of previous messages
+        
+        Returns:
+            Dictionary with keys:
+            - medications: List of medication IDs/names found
+            - users: List of user IDs/names found
+        """
+        context = {
+            "medications": [],
+            "users": []
+        }
+        
+        if not conversation_history:
+            return context
+        
+        # Patterns to look for in messages
+        medication_pattern = r'"medication_id"\s*:\s*"([^"]+)"'
+        medication_name_pattern = r'"name_he"\s*:\s*"([^"]+)"|"name_en"\s*:\s*"([^"]+)"'
+        user_id_pattern = r'"user_id"\s*:\s*"([^"]+)"'
+        user_name_pattern = r'"name"\s*:\s*"([^"]+)"'
+        
+        for msg in conversation_history:
+            content = msg.get("content", "")
+            if not content:
+                continue
+            
+            # Look for medication IDs
+            medication_ids = re.findall(medication_pattern, content)
+            context["medications"].extend(medication_ids)
+            
+            # Look for medication names
+            medication_names_he = re.findall(medication_name_pattern, content)
+            for match in medication_names_he:
+                if match[0]:  # Hebrew name
+                    context["medications"].append(match[0])
+                if match[1]:  # English name
+                    context["medications"].append(match[1])
+            
+            # Look for user IDs
+            user_ids = re.findall(user_id_pattern, content)
+            context["users"].extend(user_ids)
+            
+            # Look for user names
+            user_names = re.findall(user_name_pattern, content)
+            context["users"].extend(user_names)
+        
+        # Remove duplicates
+        context["medications"] = list(set(context["medications"]))
+        context["users"] = list(set(context["users"]))
+        
+        if context["medications"] or context["users"]:
+            logger.debug(f"Extracted context: {len(context['medications'])} medications, {len(context['users'])} users")
+        
+        return context
+    
     def _build_messages(
         self,
         user_message: str,
-        conversation_history: Optional[List[Dict[str, str]]] = None
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        context_info: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, str]]:
         """
         Build message list for OpenAI API from user message and history.
         
         Purpose (Why):
         Constructs the message format required by OpenAI API, including system
-        prompt, conversation history, and the current user message. This ensures
-        proper context is maintained within a single conversation session.
+        prompt, optimized conversation history, context information, and the
+        current user message. This ensures proper context is maintained while
+        minimizing token usage.
         
         Implementation (What):
         Creates a list of message dictionaries in OpenAI format. Starts with
-        system message, adds conversation history if provided, and appends the
-        current user message. History is only maintained within a single session
-        to maintain stateless behavior between sessions.
+        system message, adds optimized conversation history if provided, adds
+        context information if available, and appends the current user message.
+        History is optimized to reduce token usage while maintaining essential context.
         
         Args:
             user_message: The current user message to process
             conversation_history: Optional list of previous messages in the
                 current conversation session. Format: [{"role": "user", "content": "..."},
                 {"role": "assistant", "content": "..."}, ...]
+            context_info: Optional dictionary with context information (medications, users)
+                extracted from history to avoid redundant tool calls
         
         Returns:
             List of message dictionaries in OpenAI API format
@@ -155,8 +371,20 @@ class StreamingAgent:
             {"role": "system", "content": self.system_prompt}
         ]
         
+        # Add context information if available
+        if context_info and (context_info.get("medications") or context_info.get("users")):
+            context_msg = "Available context from conversation history:\n"
+            if context_info.get("medications"):
+                context_msg += f"- Medications already discussed: {', '.join(context_info['medications'][:5])}\n"
+            if context_info.get("users"):
+                context_msg += f"- Users already discussed: {', '.join(context_info['users'][:3])}\n"
+            context_msg += "Before calling tools, check if this information is already available."
+            messages.append({"role": "system", "content": context_msg})
+        
+        # Optimize and add conversation history
         if conversation_history:
-            messages.extend(conversation_history)
+            optimized_history = self._optimize_history(conversation_history)
+            messages.extend(optimized_history)
         
         messages.append({"role": "user", "content": user_message})
         
@@ -167,7 +395,8 @@ class StreamingAgent:
         tool_call: Any,
         correlation_id: str,
         agent_id: str,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        tool_call_cache: Optional[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Process a single tool call and return structured result.
@@ -228,6 +457,20 @@ class StreamingAgent:
             # Parse arguments (OpenAI sends as JSON string)
             arguments = json.loads(arguments_str)
             
+            # Check cache for duplicate tool calls with same arguments
+            if tool_call_cache is not None:
+                # Create cache key from tool name and sorted arguments
+                cache_key = (tool_name, json.dumps(arguments, sort_keys=True))
+                if cache_key in tool_call_cache:
+                    logger.debug(f"Cache hit for tool call: {tool_name} with arguments: {arguments_str[:100]}...")
+                    cached_result = tool_call_cache[cache_key]
+                    # Return cached result with current tool_call_id
+                    return {
+                        "tool_call_id": tool_id,
+                        "result": cached_result["result"],
+                        "success": cached_result.get("success", True)
+                    }
+            
             # Execute the tool with correlation ID for audit logging
             result = execute_tool(
                 tool_name=tool_name,
@@ -239,6 +482,15 @@ class StreamingAgent:
             
             # Format result as JSON string for OpenAI
             result_str = json.dumps(result, ensure_ascii=False)
+            
+            # Cache the result if cache is available
+            if tool_call_cache is not None:
+                cache_key = (tool_name, json.dumps(arguments, sort_keys=True))
+                tool_call_cache[cache_key] = {
+                    "result": result_str,
+                    "success": result.get("success", True) if isinstance(result, dict) else True
+                }
+                logger.debug(f"Cached result for tool call: {tool_name}")
             
             logger.debug(f"Tool {tool_name} executed successfully")
             
@@ -267,7 +519,8 @@ class StreamingAgent:
         tool_calls: List[Any],
         correlation_id: str,
         agent_id: str = "default",
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
+        tool_call_cache: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
         Process tool calls from OpenAI API and execute them in parallel.
@@ -320,7 +573,7 @@ class StreamingAgent:
         # Execute tools in parallel using ThreadPoolExecutor
         # This is safe because tools are independent and don't share mutable state
         # RateLimiter and AuditLogger are thread-safe with locks
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             # Submit all tool calls for parallel execution
             future_to_tool = {
                 executor.submit(
@@ -328,7 +581,8 @@ class StreamingAgent:
                     tool_call,
                     correlation_id,
                     agent_id,
-                    context
+                    context,
+                    tool_call_cache
                 ): tool_call
                 for tool_call in tool_calls
             }
@@ -391,7 +645,8 @@ class StreamingAgent:
         user_message: str,
         conversation_history: Optional[List[Dict[str, str]]] = None,
         agent_id: Optional[str] = None,
-        include_tool_calls: bool = False
+        include_tool_calls: bool = False,
+        context: Optional[Dict[str, Any]] = None
     ) -> Generator[str, None, None]:
         """
         Stream agent response in real-time as a generator.
@@ -467,18 +722,43 @@ class StreamingAgent:
             yield "I'm here to help! Please ask me about medications, stock availability, or prescription requirements."
             return
         
-        messages = self._build_messages(user_message, conversation_history)
+        # Normalize input to handle repetitive content
+        normalized_message, was_cleaned = self._normalize_input(user_message)
+        if was_cleaned:
+            logger.info("Input was normalized (repetitive content detected or length limited)")
+            _audit_logger.log_agent_action(
+                correlation_id=correlation_id,
+                agent_id=effective_agent_id,
+                action="input_normalized",
+                details={"original_length": len(user_message), "normalized_length": len(normalized_message)},
+                status="success"
+            )
+            # Note: We don't yield a message to user about cleaning to avoid interrupting flow
+        
+        # Extract context information from history
+        context_info = self._extract_context_info(conversation_history)
+        
+        # Build messages with optimized history and context
+        messages = self._build_messages(normalized_message, conversation_history, context_info)
         max_iterations = 10  # Prevent infinite loops
         iteration = 0
         
         logger.info(f"Processing user message with streaming (correlation_id: {correlation_id})")
         logger.debug(f"Message: {user_message[:100]}...")
         
-        # Build context for audit logging
-        context = {
+        # Build context for audit logging and tool execution
+        if context is None:
+            context = {}
+        context.update({
             "user_message": user_message[:500],  # Limit message length
             "conversation_history_length": len(conversation_history) if conversation_history else 0
-        }
+        })
+        
+        # Track authentication errors to prevent retrying the same failed authentication
+        auth_errors = []  # List of authentication error messages seen in previous iterations
+        
+        # Cache tool call results within this request to prevent duplicate calls
+        tool_call_cache = {}  # Key: (tool_name, json.dumps(sorted arguments)), Value: result dict
         
         while iteration < max_iterations:
             iteration += 1
@@ -582,8 +862,73 @@ class StreamingAgent:
                         tool_calls_collected,
                         correlation_id=correlation_id,
                         agent_id=effective_agent_id,
-                        context=context
+                        context=context,
+                        tool_call_cache=tool_call_cache
                     )
+                    
+                    # Check for authentication errors in tool results
+                    current_auth_errors = []
+                    for tool_message in tool_messages:
+                        try:
+                            result_content = json.loads(tool_message.get("content", "{}"))
+                            error_msg = result_content.get("error", "")
+                            success = result_content.get("success", True)
+                            
+                            # Check if this is an authentication error (improved detection)
+                            if error_msg and not success:
+                                error_lower = error_msg.lower()
+                                # Detect various authentication error patterns
+                                if any(pattern in error_lower for pattern in [
+                                    "authentication required",
+                                    "authentication",
+                                    "login required",
+                                    "not authenticated",
+                                    "unauthorized",
+                                    "access denied"
+                                ]):
+                                    current_auth_errors.append(error_msg)
+                        except (json.JSONDecodeError, AttributeError):
+                            pass
+                    
+                    # If we see authentication errors, handle them immediately
+                    if current_auth_errors:
+                        # Check if we've seen this error before (in any iteration)
+                        for auth_error in current_auth_errors:
+                            if auth_error in auth_errors:
+                                # Same authentication error seen before - stop retrying immediately
+                                logger.warning(f"Authentication error repeated: {auth_error}. Stopping retries.")
+                                error_response = (
+                                    "I apologize, but I'm unable to access your prescription information due to an authentication issue. "
+                                    "Please ensure you are logged in and try again. If the problem persists, please contact support."
+                                )
+                                yield error_response
+                                _audit_logger.log_agent_action(
+                                    correlation_id=correlation_id,
+                                    agent_id=effective_agent_id,
+                                    action="authentication_error_repeated",
+                                    details={"error": auth_error, "iteration": iteration},
+                                    status="error"
+                                )
+                                return
+                        
+                        # First time seeing this error - add to list and respond immediately
+                        auth_errors.extend(current_auth_errors)
+                        # If this is the first iteration and we got auth error, respond immediately
+                        if iteration == 1:
+                            logger.info("Authentication error detected in first iteration, responding immediately")
+                            error_response = (
+                                "I'm unable to access your prescription information. Authentication is required. "
+                                "Please log in to your account and try again."
+                            )
+                            yield error_response
+                            _audit_logger.log_agent_action(
+                                correlation_id=correlation_id,
+                                agent_id=effective_agent_id,
+                                action="authentication_error_detected",
+                                details={"error": current_auth_errors[0], "iteration": iteration},
+                                status="error"
+                            )
+                            return
                     
                     # If include_tool_calls is True, yield tool call results after execution
                     if include_tool_calls:

@@ -53,12 +53,17 @@ The agent identifies that the user is asking about prescription requirements and
 }
 ```
 
+**Important Notes:**
+- `get_medication_by_name` returns **basic medication information only** (names, active ingredients, dosage forms, instructions, description)
+- `get_medication_by_name` **does NOT return** prescription requirement or stock availability information
+- The `medication_id` from this response is **required** for calling `check_prescription_requirement` and `check_stock_availability`
+
 **Error Handling:**
 - If medication is not found, the agent receives `MedicationSearchError` with suggestions
 - If there are multiple results, the agent can ask the user for clarification
 
 ### Step 3: Check Prescription Requirement
-After finding the medication, the agent checks the prescription requirement.
+After finding the medication and obtaining the `medication_id`, the agent must call `check_prescription_requirement` to get prescription information, since `get_medication_by_name` does not return prescription data.
 
 **Tool Call:**
 ```json
@@ -125,6 +130,8 @@ If the user also asked about availability, or if the agent decides it's relevant
 - If user explicitly asked about availability → always check
 - If medication requires prescription → recommended to check availability to provide comprehensive information
 - If medication does not require prescription → can check availability if relevant
+
+**Important:** `check_stock_availability` must be called separately because `get_medication_by_name` does not return stock information.
 
 ### Step 5: Response to User
 The agent summarizes the information and provides a comprehensive response to the user.
@@ -225,7 +232,9 @@ User Query
     ↓
 get_medication_by_name(name)
     ↓
-    ├─→ Medication found → check_prescription_requirement(medication_id)
+    ├─→ Medication found → Get medication_id + basic info (NO prescription or stock info)
+    │                          ↓
+    │                      check_prescription_requirement(medication_id)
     │                          ↓
     │                      Prescription info retrieved
     │                          ↓
@@ -245,9 +254,9 @@ get_medication_by_name(name)
 **User:** "אני צריך אנטיביוטיקה, האם צריך מרשם? וזה זמין?" (I need antibiotics, do I need a prescription? And is it available?)
 
 **Agent Tool Calls:**
-1. `get_medication_by_name(name="אנטיביוטיקה")` → `medication_id: "med_003"`
-2. `check_prescription_requirement(medication_id="med_003")` → `requires_prescription: true`
-3. `check_stock_availability(medication_id="med_003")` → `available: true, quantity: 75`
+1. `get_medication_by_name(name="אנטיביוטיקה")` → `medication_id: "med_003"` + basic medication info (NO prescription or stock info)
+2. `check_prescription_requirement(medication_id="med_003")` → `requires_prescription: true` (required because `get_medication_by_name` does not return prescription info)
+3. `check_stock_availability(medication_id="med_003")` → `available: true, quantity: 75` (required because `get_medication_by_name` does not return stock info)
 
 **Agent Response:**
 "אמוקסיצילין דורש מרשם רופא. התרופה זמינה במלאי - יש לנו 75 יחידות. אנא הבא מרשם רופא תקף כדי לרכוש את התרופה." (Amoxicillin requires a doctor's prescription. The medication is available in stock - we have 75 units. Please bring a valid doctor's prescription to purchase the medication.)
@@ -257,8 +266,8 @@ get_medication_by_name(name)
 **User:** "Does Acetaminophen require a prescription?"
 
 **Agent Tool Calls:**
-1. `get_medication_by_name(name="Acetaminophen")` → `medication_id: "med_001"`
-2. `check_prescription_requirement(medication_id="med_001")` → `requires_prescription: false`
+1. `get_medication_by_name(name="Acetaminophen")` → `medication_id: "med_001"` + basic medication info
+2. `check_prescription_requirement(medication_id="med_001")` → `requires_prescription: false` (required because `get_medication_by_name` does not return prescription info)
 
 **Agent Response:**
 "Acetaminophen does not require a doctor's prescription - it can be purchased without a prescription. The medication is available in stock - we have 150 units."
@@ -268,9 +277,9 @@ get_medication_by_name(name)
 **User:** "אני צריך אמוקסיצילין, צריך מרשם?" (I need Amoxicillin, do I need a prescription?)
 
 **Agent Tool Calls:**
-1. `get_medication_by_name(name="אמוקסיצילין")` → `medication_id: "med_003"`
-2. `check_prescription_requirement(medication_id="med_003")` → `requires_prescription: true`
-3. `check_stock_availability(medication_id="med_003")` → `available: false, quantity: 0`
+1. `get_medication_by_name(name="אמוקסיצילין")` → `medication_id: "med_003"` + basic medication info
+2. `check_prescription_requirement(medication_id="med_003")` → `requires_prescription: true` (required because `get_medication_by_name` does not return prescription info)
+3. `check_stock_availability(medication_id="med_003")` → `available: false, quantity: 0` (required because `get_medication_by_name` does not return stock info)
 
 **Agent Response:**
 "אמוקסיצילין דורש מרשם רופא. כרגע התרופה לא זמינה במלאי. אנא פנה לבית המרקחת עם מרשם רופא לבדיקת מועד אספקה מחדש." (Amoxicillin requires a doctor's prescription. The medication is currently not available in stock. Please contact the pharmacy with a doctor's prescription to check when it will be restocked.)
@@ -280,9 +289,9 @@ get_medication_by_name(name)
 **User:** "I want to buy Paracetamol. Do I need a prescription and is it in stock?"
 
 **Agent Tool Calls:**
-1. `get_medication_by_name(name="Paracetamol")` → `medication_id: "med_001"`
-2. `check_prescription_requirement(medication_id="med_001")` → `requires_prescription: false`
-3. `check_stock_availability(medication_id="med_001")` → `available: true, quantity: 150`
+1. `get_medication_by_name(name="Paracetamol")` → `medication_id: "med_001"` + basic medication info
+2. `check_prescription_requirement(medication_id="med_001")` → `requires_prescription: false` (required because `get_medication_by_name` does not return prescription info)
+3. `check_stock_availability(medication_id="med_001")` → `available: true, quantity: 150` (required because `get_medication_by_name` does not return stock info)
 
 **Agent Response:**
 "Paracetamol (Acetaminophen) does not require a doctor's prescription - it can be purchased without a prescription. The medication is available in stock - we have 150 units."

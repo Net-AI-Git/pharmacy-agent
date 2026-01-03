@@ -273,8 +273,11 @@ class TestRateLimiterThreadSafety:
         
         # Assert
         # Verify consecutive tracking exists
-        assert agent_id in rate_limiter._consecutive_calls, \
-            f"Expected consecutive calls tracking for agent {agent_id}"
+        # Note: _consecutive_calls uses (correlation_id, tool_name) as key, not agent_id
+        # Since correlation_id defaults to agent_id when not provided, we check for that
+        consecutive_key = (agent_id, tool_name)
+        assert consecutive_key in rate_limiter._consecutive_calls, \
+            f"Expected consecutive calls tracking for key {consecutive_key}, got keys: {list(rate_limiter._consecutive_calls.keys())}"
         
         # Verify last tool is set
         assert agent_id in rate_limiter._last_tool, \

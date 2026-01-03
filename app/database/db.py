@@ -291,4 +291,58 @@ class DatabaseManager:
         
         logger.debug(f"Search for '{name}' (lang={language}) found {len(results)} results")
         return results
+    
+    def search_users_by_name_or_email(self, name_or_email: str) -> List[User]:
+        """
+        Search users by name or email address.
+        
+        Purpose (Why):
+        Enables finding users when they provide their name or email address instead
+        of user_id. This supports natural language queries where users identify
+        themselves by name or email, which is more user-friendly than requiring
+        technical IDs. Supports case-insensitive partial matching for flexible search.
+        
+        Implementation (What):
+        Performs case-insensitive partial matching against user names and email
+        addresses. Searches both fields simultaneously and returns all matching
+        users. If data is not loaded, automatically loads the database. Returns
+        empty list if no matches found.
+        
+        Args:
+            name_or_email: The name or email address to search for (case-insensitive, partial match)
+        
+        Returns:
+            List of User model instances matching the search (empty list if none found)
+        """
+        if self._data is None:
+            self.load_db()
+        
+        if not name_or_email or not name_or_email.strip():
+            logger.warning("Empty search name_or_email provided")
+            return []
+        
+        search_term = name_or_email.lower().strip()
+        results = []
+        
+        for user_data in self._data.get("users", []):
+            user_id = user_data.get("user_id")
+            already_added = any(u.user_id == user_id for u in results)
+            
+            if already_added:
+                continue
+            
+            # Search in name
+            name = user_data.get("name", "").lower()
+            if search_term in name:
+                results.append(User(**user_data))
+                continue
+            
+            # Search in email
+            email = user_data.get("email", "").lower()
+            if search_term in email:
+                results.append(User(**user_data))
+                continue
+        
+        logger.debug(f"Search for '{name_or_email}' found {len(results)} users")
+        return results
 

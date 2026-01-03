@@ -13,6 +13,7 @@ and thinking/reasoning for analysis.
 
 import json
 import logging
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -115,6 +116,37 @@ def run_single_test(test_config: Dict[str, Any]) -> Dict[str, Any]:
     user_message = input_data["user_message"]
     conversation_history = input_data.get("conversation_history")
     
+    # Extract authenticated_user_id from input if present
+    authenticated_user_id = input_data.get("authenticated_user_id")
+    authenticated_username = input_data.get("authenticated_username")
+    authenticated_password = input_data.get("authenticated_password")
+    
+    # Clean user_message - remove [Authenticated User ID: ...] if present
+    # This allows backward compatibility while using proper authentication
+    pattern = r'\[Authenticated User ID:\s*[^\]]+\]'
+    user_message_cleaned = re.sub(pattern, '', user_message).strip()
+    if user_message_cleaned != user_message:
+        logger.debug(f"Removed authentication marker from user_message")
+        user_message = user_message_cleaned
+    
+    # Build context with authenticated_user_id, authenticated_username, and authenticated_password
+    context = {}
+    if authenticated_user_id:
+        context["authenticated_user_id"] = authenticated_user_id
+        logger.info(f"Using authenticated_user_id from test config: {authenticated_user_id}")
+        if authenticated_username:
+            context["authenticated_username"] = authenticated_username
+            logger.debug(f"Using authenticated_username from test config: {authenticated_username}")
+        if authenticated_password:
+            # Store both plain password and hash in context
+            # Plain password is used by get_authenticated_user_info tool
+            # Hash is used for verification
+            import hashlib
+            password_hash = hashlib.sha256(authenticated_password.encode('utf-8')).hexdigest()
+            context["authenticated_password"] = authenticated_password
+            context["authenticated_password_hash"] = password_hash
+            logger.debug(f"Using authenticated_password from test config (plain and hashed)")
+    
     # Create traced agent with parameters
     seed = parameters.get("seed")
     temperature = parameters.get("temperature")
@@ -134,7 +166,7 @@ def run_single_test(test_config: Dict[str, Any]) -> Dict[str, Any]:
     final_response = ""
     
     try:
-        for chunk in agent.stream_response(user_message, conversation_history):
+        for chunk in agent.stream_response(user_message, conversation_history, context=context):
             all_chunks.append(chunk)
             final_response += chunk
     except Exception as e:

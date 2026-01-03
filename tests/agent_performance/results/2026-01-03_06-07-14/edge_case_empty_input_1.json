@@ -1,0 +1,69 @@
+{
+  "test_name": "edge_case_empty_input_1",
+  "timestamp": "2026-01-03T06:07:47.157323",
+  "agent_type": "streaming",
+  "correlation_id": "47736d9b-18cb-4073-be60-be8660fcf831",
+  "input": {
+    "user_message": "",
+    "conversation_history": null,
+    "parameters": {
+      "model": "gpt-5",
+      "seed": 42
+    }
+  },
+  "processing": {
+    "iterations": [],
+    "correlation_id": "47736d9b-18cb-4073-be60-be8660fcf831"
+  },
+  "output": {
+    "final_response": "I'm here to help! Please ask me about medications, stock availability, or prescription requirements.",
+    "all_chunks": [
+      "I'm here to help! Please ask me about medications, stock availability, or prescription requirements."
+    ],
+    "statistics": {
+      "total_api_calls": 0,
+      "total_tool_calls": 0,
+      "total_time": 0.001,
+      "total_chunks": 1,
+      "tools_used": []
+    }
+  },
+  "evaluation": {
+    "token_usage": {
+      "total_input_tokens": 0,
+      "total_output_tokens": 0,
+      "total_tokens": 0,
+      "average_input_tokens_per_call": 0,
+      "average_output_tokens_per_call": 0,
+      "system_prompt_tokens": 0,
+      "message_tokens": 0,
+      "per_iteration_breakdown": []
+    },
+    "duplicate_api_calls": [],
+    "duplicate_tool_calls": [],
+    "redundant_information": [],
+    "efficiency_analysis": {
+      "issues": [],
+      "recommendations": [],
+      "total_issues": 0
+    },
+    "cost_estimation": {
+      "total_cost_usd": 0.0,
+      "input_cost_usd": 0.0,
+      "output_cost_usd": 0.0,
+      "model": "gpt-5",
+      "per_iteration_costs": []
+    },
+    "efficiency_score": 100.0,
+    "summary": {
+      "total_duplicate_api_calls": 0,
+      "total_duplicate_tool_calls": 0,
+      "total_redundant_information_cases": 0,
+      "total_inefficiency_issues": 0,
+      "estimated_cost_usd": 0.0,
+      "total_tokens": 0,
+      "efficiency_score": 100.0
+    },
+    "recommendations": []
+  }
+}

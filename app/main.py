@@ -21,6 +21,7 @@ import logging
 import json
 import re
 import os
+import hashlib
 from typing import Optional, List, Dict, Generator, Tuple, Any
 import gradio as gr
 from app.agent import StreamingAgent
@@ -253,7 +254,10 @@ def convert_gradio_history_to_agent_format(
 
 def chat_fn(
     message: str,
-    history: List[Tuple[str, str]]
+    history: List[Tuple[str, str]],
+    authenticated_user_id: Optional[str] = None,
+    authenticated_username: Optional[str] = None,
+    authenticated_password_hash: Optional[str] = None
 ) -> Generator[Tuple[str, str], None, None]:
     """
     Handle chat messages with streaming support and tool call display.
@@ -332,11 +336,22 @@ def chat_fn(
         tool_calls_list = []
         accumulated_text = ""
         
+        # Build context with authenticated user ID and credentials for tool execution
+        context = {}
+        if authenticated_user_id:
+            context["authenticated_user_id"] = authenticated_user_id
+            if authenticated_username:
+                context["authenticated_username"] = authenticated_username
+            if authenticated_password_hash:
+                context["authenticated_password_hash"] = authenticated_password_hash
+            logger.debug(f"Passing authenticated_user_id to agent: {authenticated_user_id}")
+        
         # Stream response chunks from agent with tool call information
         for chunk in agent.stream_response(
             user_message=message,
             conversation_history=conversation_history if conversation_history else None,
-            include_tool_calls=True
+            include_tool_calls=True,
+            context=context
         ):
             # Check if chunk contains tool call markers
             tool_call_start_match = re.search(r'\[TOOL_CALL_START\](.*?)\[/TOOL_CALL_START\]', chunk, re.DOTALL)
@@ -389,6 +404,10 @@ def chat_fn(
         yield (error_msg, "")
 
 
+# Module-level variables for theme and CSS (set by create_chat_interface)
+_custom_theme = None
+_custom_css = None
+
 def create_chat_interface() -> gr.Blocks:
     """
     Create and configure the Gradio interface for the Pharmacy AI Assistant.
@@ -420,57 +439,457 @@ def create_chat_interface() -> gr.Blocks:
         >>> app = create_chat_interface()
         >>> app.launch(server_name="0.0.0.0", server_port=7860)
     """
+    global _custom_theme, _custom_css
     logger.info("Creating Gradio interface with tool call display")
     
-    with gr.Blocks(title="Pharmacy AI Assistant", theme=gr.themes.Soft()) as app:
-        gr.Markdown(
+    # #region agent log
+    try:
+        with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "theme-fix", "hypothesisId": "A", "location": "app/main.py:425", "message": "Starting theme creation", "data": {"gradio_version": gr.__version__ if hasattr(gr, "__version__") else "unknown"}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
+    except Exception:
+        pass
+    # #endregion
+    
+    # Create a custom theme with modern colors
+    # Using only properties that are valid in Gradio 4.0+
+    # Removed: border_color_secondary, shadow_drop, shadow_drop_lg (not available in 4.0)
+    # Using solid colors instead of gradients for better compatibility
+    try:
+        # #region agent log
+        try:
+            with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "theme-fix", "hypothesisId": "A", "location": "app/main.py:432", "message": "Creating base theme", "data": {}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
+        except Exception:
+            pass
+        # #endregion
+        
+        base_theme = gr.themes.Soft(
+            primary_hue="blue",
+            secondary_hue="cyan",
+            neutral_hue="slate",
+            font=("Segoe UI", "Arial", "sans-serif"),
+            font_mono=("Consolas", "Courier New", "monospace")
+        )
+        
+        # #region agent log
+        try:
+            with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "theme-fix", "hypothesisId": "A", "location": "app/main.py:442", "message": "Setting theme properties", "data": {"properties_count": 10}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
+        except Exception:
+            pass
+        # #endregion
+        
+        # Only use properties that exist in Gradio 4.0
+        # Removed: radius_lg, radius_md, radius_sm (not available in 4.0)
+        custom_theme = base_theme.set(
+            button_primary_background_fill="#4F46E5",  # Solid color instead of gradient
+            button_primary_background_fill_hover="#4338CA",  # Solid color instead of gradient
+            button_primary_text_color="#FFFFFF",
+            button_secondary_background_fill="#F3F4F6",
+            button_secondary_background_fill_hover="#E5E7EB",
+            button_secondary_text_color="#1F2937",
+            background_fill_primary="#FFFFFF",
+            background_fill_secondary="#F9FAFB",
+            border_color_primary="#E5E7EB"
+        )
+        
+        # #region agent log
+        try:
+            with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "theme-fix", "hypothesisId": "A", "location": "app/main.py:458", "message": "Theme created successfully", "data": {"theme_type": str(type(custom_theme))}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
+        except Exception:
+            pass
+        # #endregion
+    except Exception as e:
+        # #region agent log
+        try:
+            with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
+                f.write(json.dumps({"sessionId": "debug-session", "runId": "theme-fix", "hypothesisId": "A", "location": "app/main.py:463", "message": "Theme creation failed", "data": {"error": str(e), "error_type": type(e).__name__}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
+        except Exception:
+            pass
+        # #endregion
+        logger.warning(f"Failed to create custom theme, using default Soft theme: {e}")
+        custom_theme = gr.themes.Soft()
+    
+    # Custom CSS for enhanced styling
+    custom_css = """
+    /* Main container styling */
+    .gradio-container {
+        font-family: 'Segoe UI', Arial, sans-serif;
+        max-width: 1200px !important;
+        margin: 0 auto;
+    }
+    
+    /* Header styling */
+    .header-section {
+        background: linear-gradient(135deg, #667EEA 0%, #764BA2 100%);
+        padding: 2rem;
+        border-radius: 16px;
+        margin-bottom: 2rem;
+        color: white;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    
+    .header-section h1 {
+        color: white !important;
+        margin: 0 0 1rem 0;
+        font-size: 2.5rem;
+        font-weight: 700;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+    
+    .header-section h2 {
+        color: rgba(255, 255, 255, 0.95) !important;
+        margin: 1.5rem 0 1rem 0;
+        font-size: 1.8rem;
+        font-weight: 600;
+    }
+    
+    .header-section p, .header-section li {
+        color: rgba(255, 255, 255, 0.9) !important;
+        font-size: 1.1rem;
+        line-height: 1.6;
+    }
+    
+    .header-section strong {
+        color: white !important;
+    }
+    
+    /* Chatbot styling */
+    .chatbot-container {
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        border: 1px solid #E5E7EB;
+        overflow: hidden;
+    }
+    
+    /* Input area styling */
+    .input-section {
+        background: #F9FAFB;
+        padding: 1.5rem;
+        border-radius: 12px;
+        border: 1px solid #E5E7EB;
+        margin-top: 1rem;
+    }
+    
+    /* Button styling - using CSS for gradients since theme doesn't support them */
+    button.primary {
+        background: linear-gradient(90deg, #4F46E5 0%, #7C3AED 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 0.75rem 2rem !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3) !important;
+    }
+    
+    button.primary:hover {
+        background: linear-gradient(90deg, #4338CA 0%, #6D28D9 100%) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(79, 70, 229, 0.4) !important;
+    }
+    
+    .btn-clear {
+        background: #F3F4F6 !important;
+        color: #1F2937 !important;
+        border: 1px solid #E5E7EB !important;
+        border-radius: 8px !important;
+        padding: 0.75rem 2rem !important;
+        font-weight: 600 !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .btn-clear:hover {
+        background: #E5E7EB !important;
+        transform: translateY(-2px);
+    }
+    
+    /* Tool calls display styling */
+    .tool-calls-section {
+        background: #F9FAFB;
+        border-radius: 12px;
+        padding: 1rem;
+        border: 1px solid #E5E7EB;
+        margin-top: 1rem;
+    }
+    
+    /* Examples styling */
+    .examples-section {
+        margin-top: 1.5rem;
+    }
+    
+    /* Text input styling */
+    textarea {
+        border-radius: 8px !important;
+        border: 2px solid #E5E7EB !important;
+        padding: 1rem !important;
+        font-size: 1rem !important;
+        transition: border-color 0.3s ease !important;
+    }
+    
+    textarea:focus {
+        border-color: #4F46E5 !important;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1) !important;
+    }
+    
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #F3F4F6;
+        border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: #CBD5E1;
+        border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: #94A3B8;
+    }
+    
+    /* Responsive design */
+    @media (max-width: 768px) {
+        .header-section {
+            padding: 1.5rem;
+        }
+        
+        .header-section h1 {
+            font-size: 2rem;
+        }
+        
+        .header-section h2 {
+            font-size: 1.5rem;
+        }
+    }
+    """
+    
+    # In Gradio 6.0+, theme and css should be passed to launch(), not Blocks()
+    # For compatibility with both 4.0 and 6.0, we'll pass them to launch() later
+    with gr.Blocks(
+        title="Pharmacy AI Assistant | עוזר רוקח AI"
+    ) as app:
+        # Session state for authentication
+        authenticated_user = gr.State(value=None)  # Stores user_id when authenticated
+        authenticated_username = gr.State(value=None)  # Stores username when authenticated
+        authenticated_password_hash = gr.State(value=None)  # Stores password_hash when authenticated
+        
+        # Authentication section
+        with gr.Row():
+            with gr.Column(scale=4):
+                auth_input = gr.Textbox(
+                    label="👤 Name or Email | שם או אימייל",
+                    placeholder="Enter your name or email...",
+                    show_label=True,
+                    lines=1
+                )
+            with gr.Column(scale=4):
+                auth_password = gr.Textbox(
+                    label="🔒 Password | סיסמה",
+                    placeholder="Enter your password...",
+                    show_label=True,
+                    lines=1,
+                    type="password"
+                )
+            with gr.Column(scale=2, min_width=150):
+                login_btn = gr.Button(
+                    "🔐 Login | התחבר",
+                    variant="primary",
+                    size="lg"
+                )
+                logout_btn = gr.Button(
+                    "🚪 Logout | התנתק",
+                    variant="secondary",
+                    size="lg"
+                )
+        auth_status = gr.Markdown("**Status:** Not authenticated | לא מזוהה", visible=True)
+        
+        # Header section with gradient background
+        with gr.Row():
+            with gr.Column():
+                gr.Markdown(
+                    """
+                    <div class="header-section">
+                    <h1>💊 Pharmacy AI Assistant</h1>
+                    <p>Welcome! I can help you with:</p>
+                    <ul>
+                        <li>📋 Medication information and active ingredients</li>
+                        <li>💉 Dosage and usage instructions</li>
+                        <li>📦 Stock availability</li>
+                        <li>📝 Prescription requirements</li>
+                    </ul>
+                    <p><strong>🌐 Language Support:</strong> I can answer your questions in both English and Hebrew.</p>
+                    <p><strong>⚠️ Please note:</strong> I provide factual information only. For medical advice, please consult with a healthcare professional.</p>
+                    </div>
+                    """,
+                    elem_classes=["header-section"]
+                )
+        
+        # Input section - moved to top
+        with gr.Row():
+            with gr.Column(scale=9):
+                msg = gr.Textbox(
+                    label="",
+                    placeholder="💬 Type your message here... / הקלד את ההודעה שלך כאן...",
+                    show_label=False,
+                    lines=2,
+                    max_lines=5
+                )
+            with gr.Column(scale=1, min_width=100):
+                submit_btn = gr.Button(
+                    "📤 Send | שלח",
+                    variant="primary",
+                    scale=1,
+                    size="lg"
+                )
+                clear_btn = gr.Button(
+                    "🗑️ Clear | נקה",
+                    scale=1,
+                    size="lg"
+                )
+        
+        # Main chat area
+        with gr.Row():
+            chatbot = gr.Chatbot(
+                label="💬 Conversation | שיחה",
+                height=600,
+                show_label=True
+            )
+        
+        # Tool calls display (collapsible)
+        # Using Column instead of Accordion for better compatibility with Gradio 4.0
+        with gr.Column(visible=True):
+            gr.Markdown("### 🔧 Tool Calls | קריאות כלים")
+            tool_calls_display = gr.JSON(
+                label="",
+                visible=True,
+                show_label=False
+            )
+        
+        # Examples section
+        with gr.Row():
+            gr.Examples(
+                examples=[
+                    "💊 Tell me about Acamol",
+                    "📦 Is Tylenol available in stock?",
+                    "💊 תספר לי על אקמול",
+                    "📦 האם יש לכם אקמול במלאי?",
+                    "📝 Does Acamol require a prescription?",
+                    "👤 I'm John Doe, what are my prescriptions?",
+                    "👤 מה המרשמים שלי? אני John Doe",
+                    "📋 Show me my medical record",
+                    "📋 הראה לי את התיק הרפואי שלי"
+                ],
+                inputs=msg,
+                label="💡 Example Questions | שאלות לדוגמה"
+            )
+        
+        def hash_password(password: str) -> str:
             """
-            # Pharmacy AI Assistant
+            Hash a password using SHA-256 (simple hashing for demo purposes).
+            In production, use bcrypt or similar secure hashing.
             
-            Welcome to the Pharmacy AI Assistant! I can help you with:
-            - Medication information and active ingredients
-            - Dosage and usage instructions
-            - Stock availability
-            - Prescription requirements
+            Args:
+                password: Plain text password
             
-            **Please note:** I provide factual information only. For medical advice, please consult with a healthcare professional.
-            
-            ---
-            
-            # עוזר רוקח AI
-            
-            ברוכים הבאים! אני יכול לעזור עם:
-            - מידע על תרופות ורכיבים פעילים
-            - הוראות מינון ושימוש
-            - זמינות במלאי
-            - דרישות מרשם
-            
-            **שימו לב:** אני מספק מידע עובדתי בלבד. לייעוץ רפואי, יש להתייעץ עם איש מקצוע.
+            Returns:
+                Hashed password string
             """
-        )
+            return hashlib.sha256(password.encode('utf-8')).hexdigest()
         
-        chatbot = gr.Chatbot(
-            label="Conversation",
-            height=500
-        )
+        def verify_password(password: str, password_hash: Optional[str]) -> bool:
+            """
+            Verify a password against a hash.
+            
+            Args:
+                password: Plain text password to verify
+                password_hash: Hashed password to compare against
+            
+            Returns:
+                True if password matches, False otherwise
+            """
+            if not password_hash:
+                # If no password hash exists, allow access (backward compatibility)
+                # In production, this should require password setup
+                return True
+            return hash_password(password) == password_hash
         
-        tool_calls_display = gr.JSON(
-            label="Tool Calls",
-            visible=True,
-            show_label=True
-        )
+        def authenticate_user(name_or_email: str, password: str, current_user: Optional[str], current_username: Optional[str] = None, current_password_hash: Optional[str] = None) -> Tuple[Optional[str], Optional[str], Optional[str], str]:
+            """
+            Authenticate user by name or email and password.
+            
+            Args:
+                name_or_email: User name or email to authenticate
+                password: User password for authentication
+                current_user: Currently authenticated user_id (if any)
+                current_username: Currently authenticated username (if any)
+                current_password_hash: Currently authenticated password_hash (if any)
+            
+            Returns:
+                Tuple of (user_id, username, password_hash, status_message)
+            """
+            if not name_or_email or not name_or_email.strip():
+                return current_user, current_username, current_password_hash, "**Status:** Not authenticated | לא מזוהה - Please enter your name or email"
+            
+            if not password or not password.strip():
+                return current_user, current_username, current_password_hash, "**Status:** Not authenticated | לא מזוהה - Please enter your password"
+            
+            try:
+                from app.tools.user_tools import get_user_by_name_or_email
+                from app.database.db import DatabaseManager
+                
+                result = get_user_by_name_or_email(name_or_email.strip())
+                
+                if "error" in result:
+                    return current_user, current_username, current_password_hash, f"**Status:** Authentication failed | הזדהות נכשלה - {result.get('error', 'User not found')}"
+                
+                user_id = result.get("user_id")
+                if not user_id:
+                    return current_user, current_username, current_password_hash, "**Status:** Authentication failed | הזדהות נכשלה - User not found"
+                
+                # Verify password
+                db_manager = DatabaseManager()
+                user = db_manager.get_user_by_id(user_id)
+                if not user:
+                    return current_user, current_username, current_password_hash, "**Status:** Authentication failed | הזדהות נכשלה - User not found"
+                
+                # Check password
+                if not verify_password(password.strip(), user.password_hash):
+                    logger.warning(f"Authentication failed for user: {user_id} - incorrect password")
+                    return current_user, current_username, current_password_hash, "**Status:** Authentication failed | הזדהות נכשלה - Incorrect password"
+                
+                user_name = result.get("name", "Unknown")
+                # Store username and password hash for authenticated user
+                username_to_store = name_or_email.strip()
+                password_hash_to_store = hash_password(password.strip())
+                
+                logger.info(f"User authenticated: {user_id} ({user_name}), storing username and password_hash")
+                return user_id, username_to_store, password_hash_to_store, f"**Status:** ✅ Authenticated as {user_name} ({user_id}) | מזוהה כ-{user_name}"
+            except Exception as e:
+                logger.error(f"Authentication error: {str(e)}", exc_info=True)
+                return current_user, current_username, current_password_hash, f"**Status:** Authentication error | שגיאת הזדהות - {str(e)}"
         
-        msg = gr.Textbox(
-            label="Message",
-            placeholder="Type your message here... (Type your message here... / הקלד את ההודעה שלך כאן...)",
-            show_label=False,
-            scale=9
-        )
+        def logout_user(current_user: Optional[str], current_username: Optional[str] = None, current_password_hash: Optional[str] = None) -> Tuple[None, None, None, str]:
+            """
+            Logout current user.
+            
+            Args:
+                current_user: Currently authenticated user_id (if any)
+                current_username: Currently authenticated username (if any)
+                current_password_hash: Currently authenticated password_hash (if any)
+            
+            Returns:
+                Tuple of (None, None, None, status_message)
+            """
+            logger.info(f"User logged out: {current_user}")
+            return None, None, None, "**Status:** Not authenticated | לא מזוהה"
         
-        submit_btn = gr.Button("Send", variant="primary", scale=1)
-        clear_btn = gr.Button("Clear", scale=1)
-        
-        def respond(message: str, history: List[Dict[str, str]]) -> Generator[Tuple[List[Dict[str, str]], Any], None, None]:
+        def respond(message: str, history: List[Dict[str, str]], authenticated_user_id: Optional[str] = None, authenticated_username: Optional[str] = None, authenticated_password_hash: Optional[str] = None) -> Generator[Tuple[List[Dict[str, str]], Any], None, None]:
             """
             Handle user message and update chat history with tool calls (streaming).
             
@@ -597,9 +1016,17 @@ def create_chat_interface() -> gr.Blocks:
                     else:
                         i += 1
                 
+                # Enhance message with authenticated user context if available
+                enhanced_message = message
+                if authenticated_user_id:
+                    # Add user context to message so agent knows who is asking
+                    # The agent should use this user_id directly for user-related queries
+                    enhanced_message = f"[Authenticated User ID: {authenticated_user_id}] {message}\n\nIMPORTANT: You are authenticated as user_id={authenticated_user_id}. For any queries about 'my prescriptions', 'my medical record', or 'my medications', use user_id={authenticated_user_id} directly. DO NOT search for other users by name or email."
+                    logger.debug(f"Enhanced message with user context: {authenticated_user_id}")
+                
                 # Stream response chunks in real-time
                 # Each yield updates the UI immediately, providing true streaming experience
-                for chunk, tool_calls_json in chat_fn(message, tuple_history):
+                for chunk, tool_calls_json in chat_fn(enhanced_message, tuple_history, authenticated_user_id, authenticated_username, authenticated_password_hash):
                     # Accumulate text chunks for complete response
                     response_text += chunk
                     
@@ -720,6 +1147,22 @@ def create_chat_interface() -> gr.Blocks:
             # #endregion
             return [], {}
         
+        # Connect authentication components
+        login_btn.click(
+            authenticate_user,
+            inputs=[auth_input, auth_password, authenticated_user, authenticated_username, authenticated_password_hash],
+            outputs=[authenticated_user, authenticated_username, authenticated_password_hash, auth_status]
+        ).then(
+            lambda: ("", ""),  # Clear auth inputs after login
+            outputs=[auth_input, auth_password]
+        )
+        
+        logout_btn.click(
+            logout_user,
+            inputs=[authenticated_user, authenticated_username, authenticated_password_hash],
+            outputs=[authenticated_user, authenticated_username, authenticated_password_hash, auth_status]
+        )
+        
         # Connect components with streaming support
         # Gradio automatically detects generators and enables streaming
         # The respond function yields updates in real-time, updating the UI chunk by chunk
@@ -728,7 +1171,7 @@ def create_chat_interface() -> gr.Blocks:
         # #endregion
         msg.submit(
             respond,
-            inputs=[msg, chatbot],
+            inputs=[msg, chatbot, authenticated_user, authenticated_username, authenticated_password_hash],
             outputs=[chatbot, tool_calls_display]
         ).then(
             lambda: "",  # Clear message box after submission
@@ -737,7 +1180,7 @@ def create_chat_interface() -> gr.Blocks:
         
         submit_btn.click(
             respond,
-            inputs=[msg, chatbot],
+            inputs=[msg, chatbot, authenticated_user, authenticated_username, authenticated_password_hash],
             outputs=[chatbot, tool_calls_display]
         ).then(
             lambda: "",  # Clear message box after submission
@@ -749,20 +1192,12 @@ def create_chat_interface() -> gr.Blocks:
             inputs=None,
             outputs=[chatbot, tool_calls_display]
         )
-        
-        # Examples
-        gr.Examples(
-            examples=[
-                "Tell me about Acamol",
-                "Is Tylenol available in stock?",
-                "תספר לי על אקמול",
-                "האם יש לכם אקמול במלאי?",
-                "Does Acamol require a prescription?"
-            ],
-            inputs=msg
-        )
     
     logger.info("Gradio interface created successfully with tool call display")
+    # Store theme and css as module-level variables for use in launch()
+    _custom_theme = custom_theme
+    _custom_css = custom_css
+    # Return only app to match function signature
     return app
 
 
@@ -773,14 +1208,41 @@ def create_chat_interface() -> gr.Blocks:
 _debug_log("app/main.py:536", "Starting Gradio app creation", {"agent_is_none": agent is None}, "H3")
 # #endregion
 try:
-    app = create_chat_interface()
+    # #region agent log
+    try:
+        with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "post-fix", "hypothesisId": "B", "location": "app/main.py:1034", "message": "Calling create_chat_interface()", "data": {}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
+    except Exception:
+        pass
+    # #endregion
+    result = create_chat_interface()
+    # #region agent log
+    try:
+        with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "post-fix", "hypothesisId": "B", "location": "app/main.py:1036", "message": "create_chat_interface() returned", "data": {"result_type": str(type(result)), "is_tuple": isinstance(result, tuple)}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
+    except Exception:
+        pass
+    # #endregion
+    app = result
+    # Get theme and css from module-level variables (set by create_chat_interface)
+    custom_theme = _custom_theme if _custom_theme is not None else gr.themes.Soft()
+    custom_css = _custom_css if _custom_css is not None else ""
     logger.info("Main application: Gradio ChatInterface created and ready")
     # #region agent log
     _debug_log("app/main.py:538", "Gradio app created successfully", {"app_is_none": app is None}, "H3")
     # #endregion
 except Exception as e:
+    # #region agent log
+    try:
+        with open(r"c:\Users\Noga\OneDrive\Desktop\Wond\.cursor\debug.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps({"sessionId": "debug-session", "runId": "post-fix", "hypothesisId": "B", "location": "app/main.py:1050", "message": "Exception in create_chat_interface()", "data": {"error": str(e), "error_type": type(e).__name__}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
+    except Exception:
+        pass
+    # #endregion
     logger.error(f"Main application: Failed to create ChatInterface: {str(e)}", exc_info=True)
     app = None
+    custom_theme = gr.themes.Soft()  # Fallback theme
+    custom_css = ""  # Fallback CSS
     # #region agent log
     _debug_log("app/main.py:541", "Gradio app creation failed", {"error": str(e), "error_type": type(e).__name__}, "H3")
     # #endregion
@@ -833,12 +1295,29 @@ def main() -> None:
         # #region agent log
         _debug_log("app/main.py:625", "Calling app.launch() - this is a blocking call", {"server_name": "0.0.0.0", "server_port": 7860}, "H1")
         # #endregion
-        result = app.launch(
-            server_name="0.0.0.0",
-            server_port=7860,
-            share=False,
-            show_error=True
-        )
+        # In Gradio 6.0+, theme and css should be passed to launch()
+        # For compatibility, we check if these parameters are supported
+        launch_kwargs = {
+            "server_name": "0.0.0.0",
+            "server_port": 7860,
+            "share": False,
+            "show_error": True
+        }
+        # Try to add theme and css if supported (Gradio 6.0+)
+        try:
+            # Check if launch accepts theme parameter by inspecting signature
+            import inspect
+            launch_sig = inspect.signature(app.launch)
+            if "theme" in launch_sig.parameters:
+                launch_kwargs["theme"] = custom_theme
+            if "css" in launch_sig.parameters:
+                launch_kwargs["css"] = custom_css
+        except Exception:
+            # If inspection fails, try passing them anyway
+            # They'll be ignored if not supported
+            pass
+        
+        result = app.launch(**launch_kwargs)
         # #region agent log
         _debug_log("app/main.py:631", "app.launch() returned (should not happen - blocking call)", {"result": str(result)}, "H1")
         # #endregion

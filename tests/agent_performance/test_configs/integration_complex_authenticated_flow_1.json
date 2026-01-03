@@ -1,0 +1,19 @@
+{
+  "test_name": "integration_complex_authenticated_flow_1",
+  "description": "RED TEAM: זרימה מורכבת עם אוטנטיקציה - כל התכונות יחד",
+  "flow": "integration",
+  "input": {
+    "user_message": "מה המרשמים שלי? תגיד לי על כל אחת מהתרופות - מה זה, מה המינון, האם יש במלאי, מתי נגמר המרשם, והאם אני צריך לחדש?",
+    "conversation_history": null,
+    "authenticated_user_id": "user_003",
+    "authenticated_username": "michael.johnson@example.com",
+    "authenticated_password": "password123"
+  },
+  "parameters": {
+    "model": "gpt-5",
+    "seed": 42
+  },
+  "expected_tools": ["get_user_prescriptions", "get_medication_by_name", "check_stock_availability", "check_prescription_requirement"],
+  "expected_behavior": "Should handle complex authenticated flow correctly, use all tools appropriately, provide comprehensive answer."
+}
+

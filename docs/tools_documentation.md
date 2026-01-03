@@ -185,24 +185,230 @@ if result.get("sufficient_quantity"):
 Enables the AI agent to verify whether medications require prescriptions when users ask about prescription requirements. Provides essential information for compliance with pharmacy regulations and helps customers understand what they need before attempting to purchase medications.
 
 **Implementation (What):**
-Uses DatabaseManager to retrieve medication by ID from the database. Extracts prescription requirement information including requires_prescription status and determines prescription_type. Returns complete prescription requirement information if medication is found, or error with safe fallback values (requires_prescription=True, prescription_type="prescription_required") if not found. Uses module-level caching for DatabaseManager.
+Uses DatabaseManager to retrieve medication by ID and check prescription requirement. Returns prescription requirement information including whether a prescription is required and the prescription type. Uses safe fallback values (requires_prescription=True) when medication is not found or errors occur to ensure safety.
 
 **Parameters:**
-- `medication_id` (str, required): The unique identifier of the medication to check
+- `medication_id` (str, required): The unique identifier of the medication to check prescription requirements for
 
 **Returns:**
 - `Dict[str, Any]`: Dictionary containing either:
-  - `PrescriptionCheckResult`: If medication is found (includes prescription requirement details)
-  - `PrescriptionCheckError`: If medication is not found or error occurs (includes error message and safe fallback values)
+  - `PrescriptionCheckResult`: If medication is found (includes requires_prescription, prescription_type)
+  - `PrescriptionCheckError`: If medication is not found (includes error message and safe fallback values)
 
-**Success Response Schema (No Prescription Required):**
+**Success Response Schema:**
 ```python
 {
-    "medication_id": "med_001",
-    "medication_name": "אקמול",
-    "requires_prescription": False,
-    "prescription_type": "not_required"
+    "requires_prescription": false,
+    "prescription_type": "not_required",
+    "medication_name": "Acetaminophen"
 }
+```
+
+**Error Response Schema:**
+```python
+{
+    "error": "Medication 'med_invalid' not found",
+    "requires_prescription": true,  # Safe fallback
+    "prescription_type": "prescription_required"  # Safe fallback
+}
+```
+
+**Raises:**
+- `ValueError`: If medication_id parameter is empty or invalid
+- `RuntimeError`: If database cannot be loaded
+
+**Example Usage:**
+```python
+from app.tools.prescription_tools import check_prescription_requirement
+
+# Check prescription requirement
+result = check_prescription_requirement("med_001")
+```
+
+---
+
+### 4. User Tools (`app/tools/user_tools.py`)
+
+#### `get_user_by_name_or_email(name_or_email: str) -> Dict[str, Any]`
+
+**Purpose (Why):**
+Enables the AI agent to find users when they provide their name or email address instead of user_id. Supports natural language queries where users identify themselves by name or email, which is more user-friendly than requiring technical IDs. Supports case-insensitive partial matching for flexible search.
+
+**Implementation (What):**
+Validates input, searches database using DatabaseManager.search_users_by_name_or_email, handles multiple results (returns first match), and provides suggestions if no user is found. Uses module-level caching for DatabaseManager to improve performance. Returns UserSearchResult if user is found, UserSearchError if not found.
+
+**Parameters:**
+- `name_or_email` (str, required): The user name or email address to search for (case-insensitive, partial match)
+
+**Returns:**
+- `Dict[str, Any]`: Dictionary containing either:
+  - `UserSearchResult`: If user is found (includes user_id, name, email, prescriptions)
+  - `UserSearchError`: If user is not found (includes error message and suggestions)
+
+**Success Response Schema:**
+```python
+{
+    "user_id": "user_001",
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "prescriptions": ["prescription_001"]
+}
+```
+
+**Error Response Schema:**
+```python
+{
+    "error": "User 'InvalidUser' not found. Please check the spelling or try a different name or email.",
+    "searched_name_or_email": "InvalidUser",
+    "suggestions": ["John Doe", "Jane Smith"]
+}
+```
+
+**Raises:**
+- `ValueError`: If name_or_email parameter is empty or invalid
+- `RuntimeError`: If database cannot be loaded
+
+**Example Usage:**
+```python
+from app.tools.user_tools import get_user_by_name_or_email
+
+# Search by name
+result = get_user_by_name_or_email("John Doe")
+
+# Search by email
+result = get_user_by_name_or_email("john.doe@example.com")
+
+# Partial match
+result = get_user_by_name_or_email("john")  # Will find "John Doe"
+```
+
+---
+
+#### `get_user_prescriptions(user_id: str) -> Dict[str, Any]`
+
+**Purpose (Why):**
+Enables the AI agent to retrieve all prescriptions associated with a user. This allows users to view their prescription history and verify prescription details. Provides complete prescription information including medication names for better user experience.
+
+**Implementation (What):**
+Validates user_id, retrieves prescriptions using DatabaseManager.get_prescriptions_by_user, enriches prescription data with medication names, and returns formatted result. Returns empty list if user has no prescriptions (not an error). Uses module-level caching for DatabaseManager to improve performance.
+
+**Parameters:**
+- `user_id` (str, required): The unique identifier of the user to get prescriptions for
+
+**Returns:**
+- `Dict[str, Any]`: Dictionary containing either:
+  - `UserPrescriptionsResult`: If user is found (includes user_id, user_name, prescriptions list)
+  - Error dictionary: If user is not found (includes error message)
+
+**Success Response Schema:**
+```python
+{
+    "user_id": "user_001",
+    "user_name": "John Doe",
+    "prescriptions": [
+        {
+            "prescription_id": "prescription_001",
+            "medication_id": "med_003",
+            "medication_name_he": "אמוקסיצילין",
+            "medication_name_en": "Amoxicillin",
+            "prescribed_by": "Dr. Sarah Levy",
+            "prescription_date": "2024-01-10T09:00:00Z",
+            "expiry_date": "2024-04-10T09:00:00Z",
+            "quantity": 30,
+            "refills_remaining": 2,
+            "status": "active"
+        }
+    ]
+}
+```
+
+**Error Response Schema:**
+```python
+{
+    "error": "User 'user_invalid' not found",
+    "success": false
+}
+```
+
+**Raises:**
+- `ValueError`: If user_id parameter is empty or invalid
+- `RuntimeError`: If database cannot be loaded
+
+**Example Usage:**
+```python
+from app.tools.user_tools import get_user_prescriptions
+
+# Get all prescriptions for user
+result = get_user_prescriptions("user_001")
+```
+
+---
+
+#### `check_user_prescription_for_medication(user_id: str, medication_id: str) -> Dict[str, Any]`
+
+**Purpose (Why):**
+Enables the AI agent to verify whether a user has an active prescription for a specific medication. This is essential for prescription validation before medication purchases and helps users understand their prescription status. Only returns active prescriptions (status="active").
+
+**Implementation (What):**
+Validates inputs, retrieves user prescriptions, filters for active prescriptions matching the medication_id, and returns result. Returns has_active_prescription=false if no active prescription found (not an error). Uses module-level caching for DatabaseManager to improve performance.
+
+**Parameters:**
+- `user_id` (str, required): The unique identifier of the user to check prescription for
+- `medication_id` (str, required): The unique identifier of the medication to check prescription for
+
+**Returns:**
+- `Dict[str, Any]`: Dictionary containing either:
+  - `PrescriptionCheckResult`: Includes has_active_prescription and optional prescription_details
+  - Error dictionary: If user or medication is not found (includes error message)
+
+**Success Response Schema (Active Prescription Found):**
+```python
+{
+    "has_active_prescription": true,
+    "prescription_details": {
+        "prescription_id": "prescription_001",
+        "medication_id": "med_003",
+        "medication_name_he": "אמוקסיצילין",
+        "medication_name_en": "Amoxicillin",
+        "prescribed_by": "Dr. Sarah Levy",
+        "prescription_date": "2024-01-10T09:00:00Z",
+        "expiry_date": "2024-04-10T09:00:00Z",
+        "quantity": 30,
+        "refills_remaining": 2,
+        "status": "active"
+    }
+}
+```
+
+**Success Response Schema (No Active Prescription):**
+```python
+{
+    "has_active_prescription": false,
+    "prescription_details": null
+}
+```
+
+**Error Response Schema:**
+```python
+{
+    "error": "User 'user_invalid' not found",
+    "success": false
+}
+```
+
+**Raises:**
+- `ValueError`: If user_id or medication_id parameter is empty or invalid
+- `RuntimeError`: If database cannot be loaded
+
+**Example Usage:**
+```python
+from app.tools.user_tools import check_user_prescription_for_medication
+
+# Check if user has active prescription
+result = check_user_prescription_for_medication("user_001", "med_003")
+```
+
+---
 ```
 
 **Success Response Schema (Prescription Required):**
@@ -326,6 +532,9 @@ result = execute_tool(
 - `"get_medication_by_name"`: Maps to `get_medication_by_name()` function
 - `"check_stock_availability"`: Maps to `check_stock_availability()` function
 - `"check_prescription_requirement"`: Maps to `check_prescription_requirement()` function
+- `"get_user_by_name_or_email"`: Maps to `get_user_by_name_or_email()` function
+- `"get_user_prescriptions"`: Maps to `get_user_prescriptions()` function
+- `"check_user_prescription_for_medication"`: Maps to `check_user_prescription_for_medication()` function
 
 ---
 
@@ -363,6 +572,42 @@ result = execute_tool(
 - `error` (str): Error message
 - `medication_id` (str): Medication ID searched
 - `available` (bool): Always False for errors
+
+### User Tools Models
+
+#### `UserSearchInput`
+- `name_or_email` (str, required): User name or email to search for
+
+#### `UserSearchResult`
+- `user_id` (str): Unique identifier for the user (use for other user tools)
+- `name` (str): Full name of the user
+- `email` (str): Email address of the user
+- `prescriptions` (List[str]): List of prescription IDs associated with this user
+
+#### `UserSearchError`
+- `error` (str): Error message
+- `searched_name_or_email` (str): Original search query
+- `suggestions` (List[str]): Suggested user names or emails
+
+#### `UserPrescriptionsInput`
+- `user_id` (str, required): User ID to get prescriptions for
+
+#### `UserPrescriptionsResult`
+- `user_id` (str): Unique identifier for the user
+- `user_name` (str): Full name of the user
+- `prescriptions` (List[PrescriptionInfo]): List of prescription information (empty if no prescriptions)
+
+#### `PrescriptionInfo`
+- All prescription fields plus medication names (Hebrew and English)
+- Fields: `prescription_id`, `medication_id`, `medication_name_he`, `medication_name_en`, `prescribed_by`, `prescription_date`, `expiry_date`, `quantity`, `refills_remaining`, `status`
+
+#### `PrescriptionCheckInput`
+- `user_id` (str, required): User ID to check prescription for
+- `medication_id` (str, required): Medication ID to check prescription for
+
+#### `PrescriptionCheckResult`
+- `has_active_prescription` (bool): Whether user has active prescription
+- `prescription_details` (Optional[PrescriptionInfo]): Prescription details if active prescription exists, None otherwise
 
 ### Prescription Tools Models
 

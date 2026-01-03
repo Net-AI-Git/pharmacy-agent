@@ -1,0 +1,3281 @@
+{
+  "test_name": "performance_parallel_queries_1",
+  "timestamp": "2026-01-03T06:15:01.873921",
+  "agent_type": "streaming",
+  "correlation_id": "8541bc3a-d884-4c71-aa85-23db8999f441",
+  "input": {
+    "user_message": "תגיד לי על אקמול ואספירין, האם יש במלאי? וגם תבדוק אם אני צריך מרשם לכל אחד מהם?",
+    "conversation_history": null,
+    "parameters": {
+      "model": "gpt-5",
+      "seed": 42
+    }
+  },
+  "processing": {
+    "iterations": [
+      {
+        "iteration": 1,
+        "api_call": {
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a professional Pharmacy AI Assistant for a retail pharmacy chain. Help customers with medication inquiries using pharmacy data.\n\n## CRITICAL RULES & SAFETY:\n\n1. **NO MEDICAL ADVICE**: Never provide medical advice, diagnosis, or treatment recommendations. Only provide factual medication information.\n2. **NO DIAGNOSIS**: Never diagnose conditions or symptoms. Redirect medical questions to healthcare professionals.\n3. **NO PURCHASE ENCOURAGEMENT**: Never encourage purchases. Provide availability information only.\n4. **REFERRAL REQUIRED**: Redirect questions requiring medical judgment to healthcare professionals (doctor, pharmacist).\n\n## BEHAVIOR:\n\n- **Bilingual**: Respond in user's language (Hebrew/English). Switch if user switches.\n- **Stateless**: Each conversation is independent. No memory between sessions.\n- **Context Awareness**: Before calling tools, check if information is already available in conversation history or context messages.\n\n## REQUIRED FUNCTIONALITY:\n\n1. **Medication Info**: Names (Hebrew/English), active ingredients (always display), dosage forms, descriptions.\n2. **Dosage**: Explain amounts, frequency, timing, maximum daily limits clearly.\n3. **Active Ingredients**: Always display (critical for safety).\n4. **Prescription Requirements**: Check and state if medication requires prescription.\n5. **Stock Availability**: Check and provide quantities and last restocked date when available.\n6. **User Prescriptions**: Find users by name/email, retrieve prescriptions, check active prescriptions.\n\n## ITERATION OPTIMIZATION:\n\n- Complete your response in as few iterations as possible. Aim for 1-2 iterations maximum.\n- When multiple tools are needed, call them all in parallel in a single iteration.\n- Only use additional iterations if absolutely necessary for clarification.\n- Provide complete, comprehensive answers in your first response.\n- Stop when you have provided a complete answer to the user's question.\n\n## TOOL USAGE:\n\n**Avoid Redundant Calls:**\n- If a tool succeeds and returns medication_id/user_id, do NOT call the same tool again with different variations.\n- Example: If get_medication_by_name(\"אקמול\") succeeds, do NOT also call get_medication_by_name(\"Acetaminophen\") - same medication.\n- Only try alternatives if first call fails.\n\n### get_medication_by_name(name, language=None)\n**When:** User asks about medication by name. **Returns:** medication_id, names, active_ingredients, dosage_forms, dosage_instructions, usage_instructions, description.\n**Critical:** Call FIRST to get medication_id. Use language=\"he\" for Hebrew, \"en\" for English.\n\n### check_stock_availability(medication_id, quantity=None)\n**When:** User asks about stock. **Returns:** Stock status, quantity_in_stock, last_restocked.\n**Critical:** Call get_medication_by_name FIRST to get medication_id.\n\n### check_prescription_requirement(medication_id)\n**When:** User asks if medication requires prescription. **Returns:** requires_prescription, prescription_type.\n**Critical:** Call get_medication_by_name FIRST to get medication_id.\n\n### get_user_by_name_or_email(name_or_email)\n**When:** User asks about prescriptions or identifies themselves. **Returns:** user_id, name, email.\n**Critical:** \n- If message contains \"[Authenticated User ID: XXX]\", call with ANY value (ignored) - tool returns authenticated user. DO NOT search for other users.\n- If NOT authenticated, call FIRST to get user_id. Supports partial matches.\n- **SECURITY:** Never search for different user when authenticated_user_id is present.\n\n### get_user_prescriptions(user_id)\n**When:** User asks \"What are my prescriptions?\" after you have user_id. **Returns:** user_id, user_name, prescriptions list.\n**Critical:** If message contains \"[Authenticated User ID: XXX]\", use that user_id directly. Otherwise, call get_user_by_name_or_email FIRST.\n\n### check_user_prescription_for_medication(user_id, medication_id)\n**When:** User asks \"Do I have prescription for X?\" after you have both IDs. **Returns:** has_active_prescription, prescription_details.\n**Critical:** If message contains \"[Authenticated User ID: XXX]\", use that user_id directly. Otherwise, call get_user_by_name_or_email FIRST for user_id, get_medication_by_name FIRST for medication_id.\n\n## FLOW EXAMPLES:\n\n**General:** \"מה זה אקמול?\" → get_medication_by_name(\"אקמול\", \"he\") → Present info. Do NOT call stock/prescription tools.\n\n**Complex:** \"תגיד לי על אקמול, האם יש במלאי והאם דורש מרשם?\" → get_medication_by_name(\"אקמול\", \"he\") → check_stock_availability(medication_id) + check_prescription_requirement(medication_id) → Present all info.\n\n**Authenticated:** \"[Authenticated User ID: user_001] מה המרשמים שלי?\" → get_user_prescriptions(\"user_001\") directly. DO NOT call get_user_by_name_or_email.\n\n**Not Authenticated:** \"מה המרשמים שלי? אני John Doe\" → get_user_by_name_or_email(\"John Doe\") → get_user_prescriptions(user_id) → Present list.\n\n## RESPONSE GUIDELINES:\n\n- Be clear, helpful, professional. Respond in user's language.\n- Always display active ingredients and explain dosage/usage in detail.\n- Use tools when needed - don't guess. Tool order: get_medication_by_name → check_stock_availability/check_prescription_requirement; get_user_by_name_or_email → get_user_prescriptions.\n- Redirect medical questions to healthcare professionals.\n\n## ERROR HANDLING:\n\n- If medication not found, suggest similar medications. If tool call fails, explain error clearly and provide alternatives.\n\nRemember: Provide accurate, factual medication information while maintaining safety. Always prioritize user safety and redirect medical questions to healthcare professionals."
+            },
+            {
+              "role": "user",
+              "content": "תגיד לי על אקמול ואספירין, האם יש במלאי? וגם תבדוק אם אני צריך מרשם לכל אחד מהם?"
+            }
+          ],
+          "parameters": {
+            "model": "gpt-5",
+            "stream": true,
+            "tool_choice": "auto",
+            "seed": 42
+          },
+          "chunks": [
+            {
+              "content": null,
+              "finish_reason": "tool_calls",
+              "thinking": null,
+              "reasoning": null
+            }
+          ],
+          "accumulated_content": "",
+          "tool_calls_collected": [
+            {
+              "id": "call_EoGPbmRJyNMVgDOOdOysl5mb",
+              "type": "function",
+              "function": {
+                "name": "get_medication_by_name",
+                "arguments": "{\"name\":\"אקמול\",\"language\":\"he\"}"
+              }
+            }
+          ],
+          "final_finish_reason": "tool_calls"
+        },
+        "tool_executions": [
+          {
+            "tool_name": "get_medication_by_name",
+            "arguments": {
+              "name": "אקמול",
+              "language": "he"
+            },
+            "result": {
+              "medication_id": "med_001",
+              "name_he": "אקמול",
+              "name_en": "Acetaminophen",
+              "active_ingredients": [
+                "Paracetamol 500mg"
+              ],
+              "dosage_forms": [
+                "Tablets",
+                "Capsules"
+              ],
+              "dosage_instructions": "500-1000mg every 4-6 hours, maximum 4g per day",
+              "usage_instructions": "Take with or after food. Can be taken up to 4 times per day as needed",
+              "description": "Pain reliever and fever reducer"
+            },
+            "execution_time": 0.012717723846435547,
+            "tool_call_id": "call_EoGPbmRJyNMVgDOOdOysl5mb",
+            "correlation_id": "8541bc3a-d884-4c71-aa85-23db8999f441"
+          }
+        ],
+        "iteration_time": 7.243793487548828
+      },
+      {
+        "iteration": 2,
+        "api_call": {
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a professional Pharmacy AI Assistant for a retail pharmacy chain. Help customers with medication inquiries using pharmacy data.\n\n## CRITICAL RULES & SAFETY:\n\n1. **NO MEDICAL ADVICE**: Never provide medical advice, diagnosis, or treatment recommendations. Only provide factual medication information.\n2. **NO DIAGNOSIS**: Never diagnose conditions or symptoms. Redirect medical questions to healthcare professionals.\n3. **NO PURCHASE ENCOURAGEMENT**: Never encourage purchases. Provide availability information only.\n4. **REFERRAL REQUIRED**: Redirect questions requiring medical judgment to healthcare professionals (doctor, pharmacist).\n\n## BEHAVIOR:\n\n- **Bilingual**: Respond in user's language (Hebrew/English). Switch if user switches.\n- **Stateless**: Each conversation is independent. No memory between sessions.\n- **Context Awareness**: Before calling tools, check if information is already available in conversation history or context messages.\n\n## REQUIRED FUNCTIONALITY:\n\n1. **Medication Info**: Names (Hebrew/English), active ingredients (always display), dosage forms, descriptions.\n2. **Dosage**: Explain amounts, frequency, timing, maximum daily limits clearly.\n3. **Active Ingredients**: Always display (critical for safety).\n4. **Prescription Requirements**: Check and state if medication requires prescription.\n5. **Stock Availability**: Check and provide quantities and last restocked date when available.\n6. **User Prescriptions**: Find users by name/email, retrieve prescriptions, check active prescriptions.\n\n## ITERATION OPTIMIZATION:\n\n- Complete your response in as few iterations as possible. Aim for 1-2 iterations maximum.\n- When multiple tools are needed, call them all in parallel in a single iteration.\n- Only use additional iterations if absolutely necessary for clarification.\n- Provide complete, comprehensive answers in your first response.\n- Stop when you have provided a complete answer to the user's question.\n\n## TOOL USAGE:\n\n**Avoid Redundant Calls:**\n- If a tool succeeds and returns medication_id/user_id, do NOT call the same tool again with different variations.\n- Example: If get_medication_by_name(\"אקמול\") succeeds, do NOT also call get_medication_by_name(\"Acetaminophen\") - same medication.\n- Only try alternatives if first call fails.\n\n### get_medication_by_name(name, language=None)\n**When:** User asks about medication by name. **Returns:** medication_id, names, active_ingredients, dosage_forms, dosage_instructions, usage_instructions, description.\n**Critical:** Call FIRST to get medication_id. Use language=\"he\" for Hebrew, \"en\" for English.\n\n### check_stock_availability(medication_id, quantity=None)\n**When:** User asks about stock. **Returns:** Stock status, quantity_in_stock, last_restocked.\n**Critical:** Call get_medication_by_name FIRST to get medication_id.\n\n### check_prescription_requirement(medication_id)\n**When:** User asks if medication requires prescription. **Returns:** requires_prescription, prescription_type.\n**Critical:** Call get_medication_by_name FIRST to get medication_id.\n\n### get_user_by_name_or_email(name_or_email)\n**When:** User asks about prescriptions or identifies themselves. **Returns:** user_id, name, email.\n**Critical:** \n- If message contains \"[Authenticated User ID: XXX]\", call with ANY value (ignored) - tool returns authenticated user. DO NOT search for other users.\n- If NOT authenticated, call FIRST to get user_id. Supports partial matches.\n- **SECURITY:** Never search for different user when authenticated_user_id is present.\n\n### get_user_prescriptions(user_id)\n**When:** User asks \"What are my prescriptions?\" after you have user_id. **Returns:** user_id, user_name, prescriptions list.\n**Critical:** If message contains \"[Authenticated User ID: XXX]\", use that user_id directly. Otherwise, call get_user_by_name_or_email FIRST.\n\n### check_user_prescription_for_medication(user_id, medication_id)\n**When:** User asks \"Do I have prescription for X?\" after you have both IDs. **Returns:** has_active_prescription, prescription_details.\n**Critical:** If message contains \"[Authenticated User ID: XXX]\", use that user_id directly. Otherwise, call get_user_by_name_or_email FIRST for user_id, get_medication_by_name FIRST for medication_id.\n\n## FLOW EXAMPLES:\n\n**General:** \"מה זה אקמול?\" → get_medication_by_name(\"אקמול\", \"he\") → Present info. Do NOT call stock/prescription tools.\n\n**Complex:** \"תגיד לי על אקמול, האם יש במלאי והאם דורש מרשם?\" → get_medication_by_name(\"אקמול\", \"he\") → check_stock_availability(medication_id) + check_prescription_requirement(medication_id) → Present all info.\n\n**Authenticated:** \"[Authenticated User ID: user_001] מה המרשמים שלי?\" → get_user_prescriptions(\"user_001\") directly. DO NOT call get_user_by_name_or_email.\n\n**Not Authenticated:** \"מה המרשמים שלי? אני John Doe\" → get_user_by_name_or_email(\"John Doe\") → get_user_prescriptions(user_id) → Present list.\n\n## RESPONSE GUIDELINES:\n\n- Be clear, helpful, professional. Respond in user's language.\n- Always display active ingredients and explain dosage/usage in detail.\n- Use tools when needed - don't guess. Tool order: get_medication_by_name → check_stock_availability/check_prescription_requirement; get_user_by_name_or_email → get_user_prescriptions.\n- Redirect medical questions to healthcare professionals.\n\n## ERROR HANDLING:\n\n- If medication not found, suggest similar medications. If tool call fails, explain error clearly and provide alternatives.\n\nRemember: Provide accurate, factual medication information while maintaining safety. Always prioritize user safety and redirect medical questions to healthcare professionals."
+            },
+            {
+              "role": "user",
+              "content": "תגיד לי על אקמול ואספירין, האם יש במלאי? וגם תבדוק אם אני צריך מרשם לכל אחד מהם?"
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_EoGPbmRJyNMVgDOOdOysl5mb",
+                  "type": "function",
+                  "function": {
+                    "name": "get_medication_by_name",
+                    "arguments": "{\"name\":\"אקמול\",\"language\":\"he\"}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "{\"medication_id\": \"med_001\", \"name_he\": \"אקמול\", \"name_en\": \"Acetaminophen\", \"active_ingredients\": [\"Paracetamol 500mg\"], \"dosage_forms\": [\"Tablets\", \"Capsules\"], \"dosage_instructions\": \"500-1000mg every 4-6 hours, maximum 4g per day\", \"usage_instructions\": \"Take with or after food. Can be taken up to 4 times per day as needed\", \"description\": \"Pain reliever and fever reducer\"}",
+              "tool_call_id": "call_EoGPbmRJyNMVgDOOdOysl5mb"
+            }
+          ],
+          "parameters": {
+            "model": "gpt-5",
+            "stream": true,
+            "tool_choice": "auto",
+            "seed": 42
+          },
+          "chunks": [
+            {
+              "content": null,
+              "finish_reason": "tool_calls",
+              "thinking": null,
+              "reasoning": null
+            }
+          ],
+          "accumulated_content": "",
+          "tool_calls_collected": [
+            {
+              "id": "call_Znq9VsvwXtrHLrES1iirCGu2",
+              "type": "function",
+              "function": {
+                "name": "get_medication_by_name",
+                "arguments": "{\"name\":\"אספירין\",\"language\":\"he\"}"
+              }
+            }
+          ],
+          "final_finish_reason": "tool_calls"
+        },
+        "tool_executions": [
+          {
+            "tool_name": "get_medication_by_name",
+            "arguments": {
+              "name": "אספירין",
+              "language": "he"
+            },
+            "result": {
+              "medication_id": "med_002",
+              "name_he": "אספירין",
+              "name_en": "Aspirin",
+              "active_ingredients": [
+                "Acetylsalicylic acid 100mg"
+              ],
+              "dosage_forms": [
+                "Tablets"
+              ],
+              "dosage_instructions": "100-300mg once daily or as directed by physician",
+              "usage_instructions": "Take with a full glass of water. Best taken with food to reduce stomach irritation",
+              "description": "Anti-inflammatory and blood thinner"
+            },
+            "execution_time": 0.0,
+            "tool_call_id": "call_Znq9VsvwXtrHLrES1iirCGu2",
+            "correlation_id": "8541bc3a-d884-4c71-aa85-23db8999f441"
+          }
+        ],
+        "iteration_time": 0.760009765625
+      },
+      {
+        "iteration": 3,
+        "api_call": {
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a professional Pharmacy AI Assistant for a retail pharmacy chain. Help customers with medication inquiries using pharmacy data.\n\n## CRITICAL RULES & SAFETY:\n\n1. **NO MEDICAL ADVICE**: Never provide medical advice, diagnosis, or treatment recommendations. Only provide factual medication information.\n2. **NO DIAGNOSIS**: Never diagnose conditions or symptoms. Redirect medical questions to healthcare professionals.\n3. **NO PURCHASE ENCOURAGEMENT**: Never encourage purchases. Provide availability information only.\n4. **REFERRAL REQUIRED**: Redirect questions requiring medical judgment to healthcare professionals (doctor, pharmacist).\n\n## BEHAVIOR:\n\n- **Bilingual**: Respond in user's language (Hebrew/English). Switch if user switches.\n- **Stateless**: Each conversation is independent. No memory between sessions.\n- **Context Awareness**: Before calling tools, check if information is already available in conversation history or context messages.\n\n## REQUIRED FUNCTIONALITY:\n\n1. **Medication Info**: Names (Hebrew/English), active ingredients (always display), dosage forms, descriptions.\n2. **Dosage**: Explain amounts, frequency, timing, maximum daily limits clearly.\n3. **Active Ingredients**: Always display (critical for safety).\n4. **Prescription Requirements**: Check and state if medication requires prescription.\n5. **Stock Availability**: Check and provide quantities and last restocked date when available.\n6. **User Prescriptions**: Find users by name/email, retrieve prescriptions, check active prescriptions.\n\n## ITERATION OPTIMIZATION:\n\n- Complete your response in as few iterations as possible. Aim for 1-2 iterations maximum.\n- When multiple tools are needed, call them all in parallel in a single iteration.\n- Only use additional iterations if absolutely necessary for clarification.\n- Provide complete, comprehensive answers in your first response.\n- Stop when you have provided a complete answer to the user's question.\n\n## TOOL USAGE:\n\n**Avoid Redundant Calls:**\n- If a tool succeeds and returns medication_id/user_id, do NOT call the same tool again with different variations.\n- Example: If get_medication_by_name(\"אקמול\") succeeds, do NOT also call get_medication_by_name(\"Acetaminophen\") - same medication.\n- Only try alternatives if first call fails.\n\n### get_medication_by_name(name, language=None)\n**When:** User asks about medication by name. **Returns:** medication_id, names, active_ingredients, dosage_forms, dosage_instructions, usage_instructions, description.\n**Critical:** Call FIRST to get medication_id. Use language=\"he\" for Hebrew, \"en\" for English.\n\n### check_stock_availability(medication_id, quantity=None)\n**When:** User asks about stock. **Returns:** Stock status, quantity_in_stock, last_restocked.\n**Critical:** Call get_medication_by_name FIRST to get medication_id.\n\n### check_prescription_requirement(medication_id)\n**When:** User asks if medication requires prescription. **Returns:** requires_prescription, prescription_type.\n**Critical:** Call get_medication_by_name FIRST to get medication_id.\n\n### get_user_by_name_or_email(name_or_email)\n**When:** User asks about prescriptions or identifies themselves. **Returns:** user_id, name, email.\n**Critical:** \n- If message contains \"[Authenticated User ID: XXX]\", call with ANY value (ignored) - tool returns authenticated user. DO NOT search for other users.\n- If NOT authenticated, call FIRST to get user_id. Supports partial matches.\n- **SECURITY:** Never search for different user when authenticated_user_id is present.\n\n### get_user_prescriptions(user_id)\n**When:** User asks \"What are my prescriptions?\" after you have user_id. **Returns:** user_id, user_name, prescriptions list.\n**Critical:** If message contains \"[Authenticated User ID: XXX]\", use that user_id directly. Otherwise, call get_user_by_name_or_email FIRST.\n\n### check_user_prescription_for_medication(user_id, medication_id)\n**When:** User asks \"Do I have prescription for X?\" after you have both IDs. **Returns:** has_active_prescription, prescription_details.\n**Critical:** If message contains \"[Authenticated User ID: XXX]\", use that user_id directly. Otherwise, call get_user_by_name_or_email FIRST for user_id, get_medication_by_name FIRST for medication_id.\n\n## FLOW EXAMPLES:\n\n**General:** \"מה זה אקמול?\" → get_medication_by_name(\"אקמול\", \"he\") → Present info. Do NOT call stock/prescription tools.\n\n**Complex:** \"תגיד לי על אקמול, האם יש במלאי והאם דורש מרשם?\" → get_medication_by_name(\"אקמול\", \"he\") → check_stock_availability(medication_id) + check_prescription_requirement(medication_id) → Present all info.\n\n**Authenticated:** \"[Authenticated User ID: user_001] מה המרשמים שלי?\" → get_user_prescriptions(\"user_001\") directly. DO NOT call get_user_by_name_or_email.\n\n**Not Authenticated:** \"מה המרשמים שלי? אני John Doe\" → get_user_by_name_or_email(\"John Doe\") → get_user_prescriptions(user_id) → Present list.\n\n## RESPONSE GUIDELINES:\n\n- Be clear, helpful, professional. Respond in user's language.\n- Always display active ingredients and explain dosage/usage in detail.\n- Use tools when needed - don't guess. Tool order: get_medication_by_name → check_stock_availability/check_prescription_requirement; get_user_by_name_or_email → get_user_prescriptions.\n- Redirect medical questions to healthcare professionals.\n\n## ERROR HANDLING:\n\n- If medication not found, suggest similar medications. If tool call fails, explain error clearly and provide alternatives.\n\nRemember: Provide accurate, factual medication information while maintaining safety. Always prioritize user safety and redirect medical questions to healthcare professionals."
+            },
+            {
+              "role": "user",
+              "content": "תגיד לי על אקמול ואספירין, האם יש במלאי? וגם תבדוק אם אני צריך מרשם לכל אחד מהם?"
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_EoGPbmRJyNMVgDOOdOysl5mb",
+                  "type": "function",
+                  "function": {
+                    "name": "get_medication_by_name",
+                    "arguments": "{\"name\":\"אקמול\",\"language\":\"he\"}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "{\"medication_id\": \"med_001\", \"name_he\": \"אקמול\", \"name_en\": \"Acetaminophen\", \"active_ingredients\": [\"Paracetamol 500mg\"], \"dosage_forms\": [\"Tablets\", \"Capsules\"], \"dosage_instructions\": \"500-1000mg every 4-6 hours, maximum 4g per day\", \"usage_instructions\": \"Take with or after food. Can be taken up to 4 times per day as needed\", \"description\": \"Pain reliever and fever reducer\"}",
+              "tool_call_id": "call_EoGPbmRJyNMVgDOOdOysl5mb"
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_Znq9VsvwXtrHLrES1iirCGu2",
+                  "type": "function",
+                  "function": {
+                    "name": "get_medication_by_name",
+                    "arguments": "{\"name\":\"אספירין\",\"language\":\"he\"}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "{\"medication_id\": \"med_002\", \"name_he\": \"אספירין\", \"name_en\": \"Aspirin\", \"active_ingredients\": [\"Acetylsalicylic acid 100mg\"], \"dosage_forms\": [\"Tablets\"], \"dosage_instructions\": \"100-300mg once daily or as directed by physician\", \"usage_instructions\": \"Take with a full glass of water. Best taken with food to reduce stomach irritation\", \"description\": \"Anti-inflammatory and blood thinner\"}",
+              "tool_call_id": "call_Znq9VsvwXtrHLrES1iirCGu2"
+            }
+          ],
+          "parameters": {
+            "model": "gpt-5",
+            "stream": true,
+            "tool_choice": "auto",
+            "seed": 42
+          },
+          "chunks": [
+            {
+              "content": null,
+              "finish_reason": "tool_calls",
+              "thinking": null,
+              "reasoning": null
+            }
+          ],
+          "accumulated_content": "",
+          "tool_calls_collected": [
+            {
+              "id": "call_jIcHbrSnVnTNB6NCCwU7GVuV",
+              "type": "function",
+              "function": {
+                "name": "check_stock_availability",
+                "arguments": "{\"medication_id\": \"med_001\"}"
+              }
+            },
+            {
+              "id": "call_TD4FudMA1Jz6tVaWM2XzraE3",
+              "type": "function",
+              "function": {
+                "name": "check_stock_availability",
+                "arguments": "{\"medication_id\": \"med_002\"}"
+              }
+            },
+            {
+              "id": "call_LifI2OysenrutZdr1xIDw7Ks",
+              "type": "function",
+              "function": {
+                "name": "check_prescription_requirement",
+                "arguments": "{\"medication_id\": \"med_001\"}"
+              }
+            },
+            {
+              "id": "call_stEpSYdzXaIiwGu1fBJAYBWQ",
+              "type": "function",
+              "function": {
+                "name": "check_prescription_requirement",
+                "arguments": "{\"medication_id\": \"med_002\"}"
+              }
+            }
+          ],
+          "final_finish_reason": "tool_calls"
+        },
+        "tool_executions": [
+          {
+            "tool_name": "check_stock_availability",
+            "arguments": {
+              "medication_id": "med_001"
+            },
+            "result": {
+              "medication_id": "med_001",
+              "medication_name": "אקמול",
+              "available": true,
+              "quantity_in_stock": 150,
+              "last_restocked": "2024-01-15T10:30:00Z",
+              "sufficient_quantity": true,
+              "requested_quantity": null
+            },
+            "execution_time": 0.0013585090637207031,
+            "tool_call_id": "call_jIcHbrSnVnTNB6NCCwU7GVuV",
+            "correlation_id": "8541bc3a-d884-4c71-aa85-23db8999f441"
+          },
+          {
+            "tool_name": "check_stock_availability",
+            "arguments": {
+              "medication_id": "med_002"
+            },
+            "result": {
+              "medication_id": "med_002",
+              "medication_name": "אספירין",
+              "available": true,
+              "quantity_in_stock": 200,
+              "last_restocked": "2024-01-20T14:00:00Z",
+              "sufficient_quantity": true,
+              "requested_quantity": null
+            },
+            "execution_time": 0.0010533332824707031,
+            "tool_call_id": "call_TD4FudMA1Jz6tVaWM2XzraE3",
+            "correlation_id": "8541bc3a-d884-4c71-aa85-23db8999f441"
+          },
+          {
+            "tool_name": "check_prescription_requirement",
+            "arguments": {
+              "medication_id": "med_001"
+            },
+            "result": {
+              "medication_id": "med_001",
+              "medication_name": "אקמול",
+              "requires_prescription": false,
+              "prescription_type": "not_required"
+            },
+            "execution_time": 0.0013623237609863281,
+            "tool_call_id": "call_LifI2OysenrutZdr1xIDw7Ks",
+            "correlation_id": "8541bc3a-d884-4c71-aa85-23db8999f441"
+          },
+          {
+            "tool_name": "check_prescription_requirement",
+            "arguments": {
+              "medication_id": "med_002"
+            },
+            "result": {
+              "medication_id": "med_002",
+              "medication_name": "אספירין",
+              "requires_prescription": false,
+              "prescription_type": "not_required"
+            },
+            "execution_time": 0.0027484893798828125,
+            "tool_call_id": "call_stEpSYdzXaIiwGu1fBJAYBWQ",
+            "correlation_id": "8541bc3a-d884-4c71-aa85-23db8999f441"
+          }
+        ],
+        "iteration_time": 6.956652402877808
+      },
+      {
+        "iteration": 4,
+        "api_call": {
+          "messages": [
+            {
+              "role": "system",
+              "content": "You are a professional Pharmacy AI Assistant for a retail pharmacy chain. Help customers with medication inquiries using pharmacy data.\n\n## CRITICAL RULES & SAFETY:\n\n1. **NO MEDICAL ADVICE**: Never provide medical advice, diagnosis, or treatment recommendations. Only provide factual medication information.\n2. **NO DIAGNOSIS**: Never diagnose conditions or symptoms. Redirect medical questions to healthcare professionals.\n3. **NO PURCHASE ENCOURAGEMENT**: Never encourage purchases. Provide availability information only.\n4. **REFERRAL REQUIRED**: Redirect questions requiring medical judgment to healthcare professionals (doctor, pharmacist).\n\n## BEHAVIOR:\n\n- **Bilingual**: Respond in user's language (Hebrew/English). Switch if user switches.\n- **Stateless**: Each conversation is independent. No memory between sessions.\n- **Context Awareness**: Before calling tools, check if information is already available in conversation history or context messages.\n\n## REQUIRED FUNCTIONALITY:\n\n1. **Medication Info**: Names (Hebrew/English), active ingredients (always display), dosage forms, descriptions.\n2. **Dosage**: Explain amounts, frequency, timing, maximum daily limits clearly.\n3. **Active Ingredients**: Always display (critical for safety).\n4. **Prescription Requirements**: Check and state if medication requires prescription.\n5. **Stock Availability**: Check and provide quantities and last restocked date when available.\n6. **User Prescriptions**: Find users by name/email, retrieve prescriptions, check active prescriptions.\n\n## ITERATION OPTIMIZATION:\n\n- Complete your response in as few iterations as possible. Aim for 1-2 iterations maximum.\n- When multiple tools are needed, call them all in parallel in a single iteration.\n- Only use additional iterations if absolutely necessary for clarification.\n- Provide complete, comprehensive answers in your first response.\n- Stop when you have provided a complete answer to the user's question.\n\n## TOOL USAGE:\n\n**Avoid Redundant Calls:**\n- If a tool succeeds and returns medication_id/user_id, do NOT call the same tool again with different variations.\n- Example: If get_medication_by_name(\"אקמול\") succeeds, do NOT also call get_medication_by_name(\"Acetaminophen\") - same medication.\n- Only try alternatives if first call fails.\n\n### get_medication_by_name(name, language=None)\n**When:** User asks about medication by name. **Returns:** medication_id, names, active_ingredients, dosage_forms, dosage_instructions, usage_instructions, description.\n**Critical:** Call FIRST to get medication_id. Use language=\"he\" for Hebrew, \"en\" for English.\n\n### check_stock_availability(medication_id, quantity=None)\n**When:** User asks about stock. **Returns:** Stock status, quantity_in_stock, last_restocked.\n**Critical:** Call get_medication_by_name FIRST to get medication_id.\n\n### check_prescription_requirement(medication_id)\n**When:** User asks if medication requires prescription. **Returns:** requires_prescription, prescription_type.\n**Critical:** Call get_medication_by_name FIRST to get medication_id.\n\n### get_user_by_name_or_email(name_or_email)\n**When:** User asks about prescriptions or identifies themselves. **Returns:** user_id, name, email.\n**Critical:** \n- If message contains \"[Authenticated User ID: XXX]\", call with ANY value (ignored) - tool returns authenticated user. DO NOT search for other users.\n- If NOT authenticated, call FIRST to get user_id. Supports partial matches.\n- **SECURITY:** Never search for different user when authenticated_user_id is present.\n\n### get_user_prescriptions(user_id)\n**When:** User asks \"What are my prescriptions?\" after you have user_id. **Returns:** user_id, user_name, prescriptions list.\n**Critical:** If message contains \"[Authenticated User ID: XXX]\", use that user_id directly. Otherwise, call get_user_by_name_or_email FIRST.\n\n### check_user_prescription_for_medication(user_id, medication_id)\n**When:** User asks \"Do I have prescription for X?\" after you have both IDs. **Returns:** has_active_prescription, prescription_details.\n**Critical:** If message contains \"[Authenticated User ID: XXX]\", use that user_id directly. Otherwise, call get_user_by_name_or_email FIRST for user_id, get_medication_by_name FIRST for medication_id.\n\n## FLOW EXAMPLES:\n\n**General:** \"מה זה אקמול?\" → get_medication_by_name(\"אקמול\", \"he\") → Present info. Do NOT call stock/prescription tools.\n\n**Complex:** \"תגיד לי על אקמול, האם יש במלאי והאם דורש מרשם?\" → get_medication_by_name(\"אקמול\", \"he\") → check_stock_availability(medication_id) + check_prescription_requirement(medication_id) → Present all info.\n\n**Authenticated:** \"[Authenticated User ID: user_001] מה המרשמים שלי?\" → get_user_prescriptions(\"user_001\") directly. DO NOT call get_user_by_name_or_email.\n\n**Not Authenticated:** \"מה המרשמים שלי? אני John Doe\" → get_user_by_name_or_email(\"John Doe\") → get_user_prescriptions(user_id) → Present list.\n\n## RESPONSE GUIDELINES:\n\n- Be clear, helpful, professional. Respond in user's language.\n- Always display active ingredients and explain dosage/usage in detail.\n- Use tools when needed - don't guess. Tool order: get_medication_by_name → check_stock_availability/check_prescription_requirement; get_user_by_name_or_email → get_user_prescriptions.\n- Redirect medical questions to healthcare professionals.\n\n## ERROR HANDLING:\n\n- If medication not found, suggest similar medications. If tool call fails, explain error clearly and provide alternatives.\n\nRemember: Provide accurate, factual medication information while maintaining safety. Always prioritize user safety and redirect medical questions to healthcare professionals."
+            },
+            {
+              "role": "user",
+              "content": "תגיד לי על אקמול ואספירין, האם יש במלאי? וגם תבדוק אם אני צריך מרשם לכל אחד מהם?"
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_EoGPbmRJyNMVgDOOdOysl5mb",
+                  "type": "function",
+                  "function": {
+                    "name": "get_medication_by_name",
+                    "arguments": "{\"name\":\"אקמול\",\"language\":\"he\"}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "{\"medication_id\": \"med_001\", \"name_he\": \"אקמול\", \"name_en\": \"Acetaminophen\", \"active_ingredients\": [\"Paracetamol 500mg\"], \"dosage_forms\": [\"Tablets\", \"Capsules\"], \"dosage_instructions\": \"500-1000mg every 4-6 hours, maximum 4g per day\", \"usage_instructions\": \"Take with or after food. Can be taken up to 4 times per day as needed\", \"description\": \"Pain reliever and fever reducer\"}",
+              "tool_call_id": "call_EoGPbmRJyNMVgDOOdOysl5mb"
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_Znq9VsvwXtrHLrES1iirCGu2",
+                  "type": "function",
+                  "function": {
+                    "name": "get_medication_by_name",
+                    "arguments": "{\"name\":\"אספירין\",\"language\":\"he\"}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "{\"medication_id\": \"med_002\", \"name_he\": \"אספירין\", \"name_en\": \"Aspirin\", \"active_ingredients\": [\"Acetylsalicylic acid 100mg\"], \"dosage_forms\": [\"Tablets\"], \"dosage_instructions\": \"100-300mg once daily or as directed by physician\", \"usage_instructions\": \"Take with a full glass of water. Best taken with food to reduce stomach irritation\", \"description\": \"Anti-inflammatory and blood thinner\"}",
+              "tool_call_id": "call_Znq9VsvwXtrHLrES1iirCGu2"
+            },
+            {
+              "role": "assistant",
+              "content": null,
+              "tool_calls": [
+                {
+                  "id": "call_jIcHbrSnVnTNB6NCCwU7GVuV",
+                  "type": "function",
+                  "function": {
+                    "name": "check_stock_availability",
+                    "arguments": "{\"medication_id\": \"med_001\"}"
+                  }
+                },
+                {
+                  "id": "call_TD4FudMA1Jz6tVaWM2XzraE3",
+                  "type": "function",
+                  "function": {
+                    "name": "check_stock_availability",
+                    "arguments": "{\"medication_id\": \"med_002\"}"
+                  }
+                },
+                {
+                  "id": "call_LifI2OysenrutZdr1xIDw7Ks",
+                  "type": "function",
+                  "function": {
+                    "name": "check_prescription_requirement",
+                    "arguments": "{\"medication_id\": \"med_001\"}"
+                  }
+                },
+                {
+                  "id": "call_stEpSYdzXaIiwGu1fBJAYBWQ",
+                  "type": "function",
+                  "function": {
+                    "name": "check_prescription_requirement",
+                    "arguments": "{\"medication_id\": \"med_002\"}"
+                  }
+                }
+              ]
+            },
+            {
+              "role": "tool",
+              "content": "{\"medication_id\": \"med_001\", \"medication_name\": \"אקמול\", \"available\": true, \"quantity_in_stock\": 150, \"last_restocked\": \"2024-01-15T10:30:00Z\", \"sufficient_quantity\": true, \"requested_quantity\": null}",
+              "tool_call_id": "call_jIcHbrSnVnTNB6NCCwU7GVuV"
+            },
+            {
+              "role": "tool",
+              "content": "{\"medication_id\": \"med_002\", \"medication_name\": \"אספירין\", \"available\": true, \"quantity_in_stock\": 200, \"last_restocked\": \"2024-01-20T14:00:00Z\", \"sufficient_quantity\": true, \"requested_quantity\": null}",
+              "tool_call_id": "call_TD4FudMA1Jz6tVaWM2XzraE3"
+            },
+            {
+              "role": "tool",
+              "content": "{\"medication_id\": \"med_001\", \"medication_name\": \"אקמול\", \"requires_prescription\": false, \"prescription_type\": \"not_required\"}",
+              "tool_call_id": "call_LifI2OysenrutZdr1xIDw7Ks"
+            },
+            {
+              "role": "tool",
+              "content": "{\"medication_id\": \"med_002\", \"medication_name\": \"אספירין\", \"requires_prescription\": false, \"prescription_type\": \"not_required\"}",
+              "tool_call_id": "call_stEpSYdzXaIiwGu1fBJAYBWQ"
+            }
+          ],
+          "parameters": {
+            "model": "gpt-5",
+            "stream": true,
+            "tool_choice": "auto",
+            "seed": 42
+          },
+          "chunks": [
+            {
+              "content": "לה",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "לן",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מידע",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " על",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " א",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ק",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "מ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ול",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " וא",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ס",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "פ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ין",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ",",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " כולל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ח",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ומרים",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " פע",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ילים",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ",",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " צ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ורות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מת",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ן",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ",",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מינ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ון",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " כל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "לי",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ",",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " זמ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ינות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " במ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "לא",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "י",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ",",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " וה",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "אם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " נ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "דרש",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "שם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":\n\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "אק",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "מ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ול",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " (",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "Ac",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "et",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "amin",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ophen",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ")\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "-",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " חומר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " פע",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " Par",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "acetam",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ol",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "500",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "״",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ג",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " לט",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "בל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יה",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "/",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ק",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "פס",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ולה",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "-",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " צ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ורות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מת",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ן",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ט",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "בל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ",",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ק",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "פס",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ולות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "-",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ת",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יאור",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מש",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "כך",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " כא",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "בים",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ומ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ור",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יד",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ח",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ום",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "-",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מינ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ון",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " כל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "לי",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "500",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "–",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "100",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "0",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "״",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ג",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " כל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "4",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "–",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "6",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " שעות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ";",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מק",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ס",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ימום",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "4",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " גר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יום",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "-",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " א",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ופן",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " שימוש",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " עם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " או",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " אחרי",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " אוכל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ";",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ניתן",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " עד",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "4",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " פעמים",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ביום",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " לפי",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " צורך",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "-",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "שם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " לא",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " דור",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ש",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "שם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "-",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " זמ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ינות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " במ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "לא",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "י",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " במ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "לא",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "י",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " (",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "150",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " יח",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ידות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ").",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ת",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "אריך",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " אס",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "פק",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ה",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " אחר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ון",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "15",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "/",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "01",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "/",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "202",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "4",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "\n\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "אס",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "פ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ין",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " (",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "A",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "spir",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "in",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ")\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "-",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " חומר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " פע",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " Ac",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "et",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "yl",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "sal",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "icy",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "lic",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " acid",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "100",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "״",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ג",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " לט",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "בל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יה",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "-",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " צ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ורות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מת",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ן",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ט",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "בל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "-",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ת",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יאור",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " נ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "וג",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ד",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ד",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "לק",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ת",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ומ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ד",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ד",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "-",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מינ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ון",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " כל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "לי",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "100",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "–",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "300",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "״",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ג",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " פעם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ביום",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " או",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " לפי",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " הנ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ח",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יית",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ופא",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "-",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " א",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ופן",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " שימוש",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " עם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " כ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "וס",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מים",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מלאה",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ";",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " רצ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "וי",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " עם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " אוכל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " להפ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "חת",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ת",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ג",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "וי",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " בק",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יבה",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "-",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "שם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " לא",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " דור",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ש",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "שם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "-",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " זמ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ינות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " במ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "לא",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "י",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " במ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "לא",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "י",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " (",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "200",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " יח",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ידות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ").",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ת",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "אריך",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " אס",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "פק",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ה",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " אחר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ון",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ":",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "20",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "/",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "01",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "/",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "202",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "4",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "\n\n",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "אם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " תר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "צה",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ",",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " אוכל",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " לבד",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "וק",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " זמ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ינות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " לכ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "מות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ספ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "צ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "יפ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ית",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ".",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " למ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ידע",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מות",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "אם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " איש",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ית",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " לגבי",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " התא",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "מה",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " רפוא",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ית",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " או",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מינ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ון",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " עב",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ורך",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ",",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " מומ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "לץ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " להת",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ייע",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ץ",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " עם",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ופא",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " או",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": " ר",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "וק",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": "ח",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": ".",
+              "finish_reason": null,
+              "thinking": null,
+              "reasoning": null
+            },
+            {
+              "content": null,
+              "finish_reason": "stop",
+              "thinking": null,
+              "reasoning": null
+            }
+          ],
+          "accumulated_content": "להלן מידע על אקמול ואספירין, כולל חומרים פעילים, צורות מתן, מינון כללי, זמינות במלאי, והאם נדרש מרשם:\n\nאקמול (Acetaminophen)\n- חומר פעיל: Paracetamol 500 מ״ג לטבליה/קפסולה\n- צורות מתן: טבליות, קפסולות\n- תיאור: משכך כאבים ומוריד חום\n- מינון כללי: 500–1000 מ״ג כל 4–6 שעות; מקסימום 4 גרם ליום\n- אופן שימוש: עם או אחרי אוכל; ניתן עד 4 פעמים ביום לפי צורך\n- מרשם: לא דורש מרשם\n- זמינות במלאי: במלאי (150 יחידות). תאריך אספקה אחרון: 15/01/2024\n\nאספירין (Aspirin)\n- חומר פעיל: Acetylsalicylic acid 100 מ״ג לטבליה\n- צורות מתן: טבליות\n- תיאור: נוגד דלקת ומדלל דם\n- מינון כללי: 100–300 מ״ג פעם ביום או לפי הנחיית רופא\n- אופן שימוש: עם כוס מים מלאה; רצוי עם אוכל להפחתת גירוי בקיבה\n- מרשם: לא דורש מרשם\n- זמינות במלאי: במלאי (200 יחידות). תאריך אספקה אחרון: 20/01/2024\n\nאם תרצה, אוכל לבדוק זמינות לכמות ספציפית. למידע מותאם אישית לגבי התאמה רפואית או מינון עבורך, מומלץ להתייעץ עם רופא או רוקח.",
+          "tool_calls_collected": [],
+          "final_finish_reason": "stop"
+        },
+        "tool_executions": [],
+        "iteration_time": 37.11941623687744
+      }
+    ],
+    "correlation_id": "8541bc3a-d884-4c71-aa85-23db8999f441"
+  },
+  "output": {
+    "final_response": "להלן מידע על אקמול ואספירין, כולל חומרים פעילים, צורות מתן, מינון כללי, זמינות במלאי, והאם נדרש מרשם:\n\nאקמול (Acetaminophen)\n- חומר פעיל: Paracetamol 500 מ״ג לטבליה/קפסולה\n- צורות מתן: טבליות, קפסולות\n- תיאור: משכך כאבים ומוריד חום\n- מינון כללי: 500–1000 מ״ג כל 4–6 שעות; מקסימום 4 גרם ליום\n- אופן שימוש: עם או אחרי אוכל; ניתן עד 4 פעמים ביום לפי צורך\n- מרשם: לא דורש מרשם\n- זמינות במלאי: במלאי (150 יחידות). תאריך אספקה אחרון: 15/01/2024\n\nאספירין (Aspirin)\n- חומר פעיל: Acetylsalicylic acid 100 מ״ג לטבליה\n- צורות מתן: טבליות\n- תיאור: נוגד דלקת ומדלל דם\n- מינון כללי: 100–300 מ״ג פעם ביום או לפי הנחיית רופא\n- אופן שימוש: עם כוס מים מלאה; רצוי עם אוכל להפחתת גירוי בקיבה\n- מרשם: לא דורש מרשם\n- זמינות במלאי: במלאי (200 יחידות). תאריך אספקה אחרון: 20/01/2024\n\nאם תרצה, אוכל לבדוק זמינות לכמות ספציפית. למידע מותאם אישית לגבי התאמה רפואית או מינון עבורך, מומלץ להתייעץ עם רופא או רוקח.",
+    "all_chunks": [
+      "לה",
+      "לן",
+      " מידע",
+      " על",
+      " א",
+      "ק",
+      "מ",
+      "ול",
+      " וא",
+      "ס",
+      "פ",
+      "יר",
+      "ין",
+      ",",
+      " כולל",
+      " ח",
+      "ומרים",
+      " פע",
+      "ילים",
+      ",",
+      " צ",
+      "ורות",
+      " מת",
+      "ן",
+      ",",
+      " מינ",
+      "ון",
+      " כל",
+      "לי",
+      ",",
+      " זמ",
+      "ינות",
+      " במ",
+      "לא",
+      "י",
+      ",",
+      " וה",
+      "אם",
+      " נ",
+      "דרש",
+      " מר",
+      "שם",
+      ":\n\n",
+      "אק",
+      "מ",
+      "ול",
+      " (",
+      "Ac",
+      "et",
+      "amin",
+      "ophen",
+      ")\n",
+      "-",
+      " חומר",
+      " פע",
+      "יל",
+      ":",
+      " Par",
+      "acetam",
+      "ol",
+      " ",
+      "500",
+      " מ",
+      "״",
+      "ג",
+      " לט",
+      "בל",
+      "יה",
+      "/",
+      "ק",
+      "פס",
+      "ולה",
+      "\n",
+      "-",
+      " צ",
+      "ורות",
+      " מת",
+      "ן",
+      ":",
+      " ט",
+      "בל",
+      "יות",
+      ",",
+      " ק",
+      "פס",
+      "ולות",
+      "\n",
+      "-",
+      " ת",
+      "יאור",
+      ":",
+      " מש",
+      "כך",
+      " כא",
+      "בים",
+      " ומ",
+      "ור",
+      "יד",
+      " ח",
+      "ום",
+      "\n",
+      "-",
+      " מינ",
+      "ון",
+      " כל",
+      "לי",
+      ":",
+      " ",
+      "500",
+      "–",
+      "100",
+      "0",
+      " מ",
+      "״",
+      "ג",
+      " כל",
+      " ",
+      "4",
+      "–",
+      "6",
+      " שעות",
+      ";",
+      " מק",
+      "ס",
+      "ימום",
+      " ",
+      "4",
+      " גר",
+      "ם",
+      " ל",
+      "יום",
+      "\n",
+      "-",
+      " א",
+      "ופן",
+      " שימוש",
+      ":",
+      " עם",
+      " או",
+      " אחרי",
+      " אוכל",
+      ";",
+      " ניתן",
+      " עד",
+      " ",
+      "4",
+      " פעמים",
+      " ביום",
+      " לפי",
+      " צורך",
+      "\n",
+      "-",
+      " מר",
+      "שם",
+      ":",
+      " לא",
+      " דור",
+      "ש",
+      " מר",
+      "שם",
+      "\n",
+      "-",
+      " זמ",
+      "ינות",
+      " במ",
+      "לא",
+      "י",
+      ":",
+      " במ",
+      "לא",
+      "י",
+      " (",
+      "150",
+      " יח",
+      "ידות",
+      ").",
+      " ת",
+      "אריך",
+      " אס",
+      "פק",
+      "ה",
+      " אחר",
+      "ון",
+      ":",
+      " ",
+      "15",
+      "/",
+      "01",
+      "/",
+      "202",
+      "4",
+      "\n\n",
+      "אס",
+      "פ",
+      "יר",
+      "ין",
+      " (",
+      "A",
+      "spir",
+      "in",
+      ")\n",
+      "-",
+      " חומר",
+      " פע",
+      "יל",
+      ":",
+      " Ac",
+      "et",
+      "yl",
+      "sal",
+      "icy",
+      "lic",
+      " acid",
+      " ",
+      "100",
+      " מ",
+      "״",
+      "ג",
+      " לט",
+      "בל",
+      "יה",
+      "\n",
+      "-",
+      " צ",
+      "ורות",
+      " מת",
+      "ן",
+      ":",
+      " ט",
+      "בל",
+      "יות",
+      "\n",
+      "-",
+      " ת",
+      "יאור",
+      ":",
+      " נ",
+      "וג",
+      "ד",
+      " ד",
+      "לק",
+      "ת",
+      " ומ",
+      "ד",
+      "ל",
+      "ל",
+      " ד",
+      "ם",
+      "\n",
+      "-",
+      " מינ",
+      "ון",
+      " כל",
+      "לי",
+      ":",
+      " ",
+      "100",
+      "–",
+      "300",
+      " מ",
+      "״",
+      "ג",
+      " פעם",
+      " ביום",
+      " או",
+      " לפי",
+      " הנ",
+      "ח",
+      "יית",
+      " ר",
+      "ופא",
+      "\n",
+      "-",
+      " א",
+      "ופן",
+      " שימוש",
+      ":",
+      " עם",
+      " כ",
+      "וס",
+      " מים",
+      " מלאה",
+      ";",
+      " רצ",
+      "וי",
+      " עם",
+      " אוכל",
+      " להפ",
+      "חת",
+      "ת",
+      " ג",
+      "יר",
+      "וי",
+      " בק",
+      "יבה",
+      "\n",
+      "-",
+      " מר",
+      "שם",
+      ":",
+      " לא",
+      " דור",
+      "ש",
+      " מר",
+      "שם",
+      "\n",
+      "-",
+      " זמ",
+      "ינות",
+      " במ",
+      "לא",
+      "י",
+      ":",
+      " במ",
+      "לא",
+      "י",
+      " (",
+      "200",
+      " יח",
+      "ידות",
+      ").",
+      " ת",
+      "אריך",
+      " אס",
+      "פק",
+      "ה",
+      " אחר",
+      "ון",
+      ":",
+      " ",
+      "20",
+      "/",
+      "01",
+      "/",
+      "202",
+      "4",
+      "\n\n",
+      "אם",
+      " תר",
+      "צה",
+      ",",
+      " אוכל",
+      " לבד",
+      "וק",
+      " זמ",
+      "ינות",
+      " לכ",
+      "מות",
+      " ספ",
+      "צ",
+      "יפ",
+      "ית",
+      ".",
+      " למ",
+      "ידע",
+      " מות",
+      "אם",
+      " איש",
+      "ית",
+      " לגבי",
+      " התא",
+      "מה",
+      " רפוא",
+      "ית",
+      " או",
+      " מינ",
+      "ון",
+      " עב",
+      "ורך",
+      ",",
+      " מומ",
+      "לץ",
+      " להת",
+      "ייע",
+      "ץ",
+      " עם",
+      " ר",
+      "ופא",
+      " או",
+      " ר",
+      "וק",
+      "ח",
+      "."
+    ],
+    "statistics": {
+      "total_api_calls": 4,
+      "total_tool_calls": 6,
+      "total_time": 52.082,
+      "total_chunks": 383,
+      "tools_used": [
+        "check_prescription_requirement",
+        "check_stock_availability",
+        "get_medication_by_name"
+      ]
+    }
+  },
+  "evaluation": {
+    "token_usage": {
+      "total_input_tokens": 2384,
+      "total_output_tokens": 818,
+      "total_tokens": 3202,
+      "average_input_tokens_per_call": 596.0,
+      "average_output_tokens_per_call": 204.5,
+      "system_prompt_tokens": 1253,
+      "message_tokens": 1131,
+      "per_iteration_breakdown": [
+        {
+          "iteration": 1,
+          "input_tokens": 1334,
+          "output_tokens": 0,
+          "total_tokens": 1334
+        },
+        {
+          "iteration": 2,
+          "input_tokens": 202,
+          "output_tokens": 0,
+          "total_tokens": 202
+        },
+        {
+          "iteration": 3,
+          "input_tokens": 312,
+          "output_tokens": 0,
+          "total_tokens": 312
+        },
+        {
+          "iteration": 4,
+          "input_tokens": 536,
+          "output_tokens": 818,
+          "total_tokens": 1354
+        }
+      ]
+    },
+    "duplicate_api_calls": [],
+    "duplicate_tool_calls": [],
+    "redundant_information": [],
+    "efficiency_analysis": {
+      "issues": [
+        {
+          "type": "repeated_message",
+          "content_preview": "תגיד לי על אקמול ואספירין, האם יש במלאי? וגם תבדוק אם אני צריך מרשם לכל אחד מהם?",
+          "severity": "low",
+          "description": "Message content repeated across iterations"
+        },
+        {
+          "type": "repeated_message",
+          "content_preview": "תגיד לי על אקמול ואספירין, האם יש במלאי? וגם תבדוק אם אני צריך מרשם לכל אחד מהם?",
+          "severity": "low",
+          "description": "Message content repeated across iterations"
+        },
+        {
+          "type": "repeated_message",
+          "content_preview": "תגיד לי על אקמול ואספירין, האם יש במלאי? וגם תבדוק אם אני צריך מרשם לכל אחד מהם?",
+          "severity": "low",
+          "description": "Message content repeated across iterations"
+        }
+      ],
+      "recommendations": [],
+      "total_issues": 3
+    },
+    "cost_estimation": {
+      "total_cost_usd": 0.04838,
+      "input_cost_usd": 0.02384,
+      "output_cost_usd": 0.02454,
+      "model": "gpt-5",
+      "per_iteration_costs": [
+        {
+          "iteration": 1,
+          "cost_usd": 0.01334,
+          "input_tokens": 1334,
+          "output_tokens": 0
+        },
+        {
+          "iteration": 2,
+          "cost_usd": 0.00202,
+          "input_tokens": 202,
+          "output_tokens": 0
+        },
+        {
+          "iteration": 3,
+          "cost_usd": 0.00312,
+          "input_tokens": 312,
+          "output_tokens": 0
+        },
+        {
+          "iteration": 4,
+          "cost_usd": 0.0299,
+          "input_tokens": 536,
+          "output_tokens": 818
+        }
+      ]
+    },
+    "efficiency_score": 94.0,
+    "summary": {
+      "total_duplicate_api_calls": 0,
+      "total_duplicate_tool_calls": 0,
+      "total_redundant_information_cases": 0,
+      "total_inefficiency_issues": 3,
+      "estimated_cost_usd": 0.04838,
+      "total_tokens": 3202,
+      "efficiency_score": 94.0
+    },
+    "recommendations": []
+  }
+}

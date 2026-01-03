@@ -1,0 +1,16 @@
+{
+  "test_name": "performance_parallel_queries_1",
+  "description": "RED TEAM: שאילתות מקבילות - בדיקת טיפול בכלים במקביל",
+  "flow": "performance",
+  "input": {
+    "user_message": "תגיד לי על אקמול ואספירין, האם יש במלאי? וגם תבדוק אם אני צריך מרשם לכל אחד מהם?",
+    "conversation_history": null
+  },
+  "parameters": {
+    "model": "gpt-5",
+    "seed": 42
+  },
+  "expected_tools": ["get_medication_by_name", "check_stock_availability", "check_prescription_requirement"],
+  "expected_behavior": "Should execute tools efficiently, possibly in parallel, provide comprehensive answer."
+}
+

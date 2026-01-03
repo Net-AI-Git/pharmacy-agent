@@ -53,12 +53,17 @@ The agent identifies that the user is asking about availability and performs a m
 }
 ```
 
+**Important Notes:**
+- `get_medication_by_name` returns **basic medication information only** (names, active ingredients, dosage forms, instructions, description)
+- `get_medication_by_name` **does NOT return** stock availability or prescription requirement information
+- The `medication_id` from this response is **required** for calling `check_stock_availability`
+
 **Error Handling:**
 - If medication is not found, the agent receives `MedicationSearchError` with suggestions for similar medications
 - The agent displays the error and suggestions to the user
 
 ### Step 3: Check Stock Availability
-After finding the medication, the agent checks stock availability.
+After finding the medication and obtaining the `medication_id`, the agent must call `check_stock_availability` to get stock information, since `get_medication_by_name` does not return stock data.
 
 **Tool Call:**
 ```json
@@ -174,7 +179,9 @@ User Query
     ↓
 get_medication_by_name(name)
     ↓
-    ├─→ Medication found → check_stock_availability(medication_id)
+    ├─→ Medication found → Get medication_id + basic info (NO stock info)
+    │                          ↓
+    │                      check_stock_availability(medication_id)
     │                          ↓
     │                      Stock info retrieved
     │                          ↓
@@ -190,8 +197,8 @@ get_medication_by_name(name)
 **User:** "האם יש לכם אקמול במלאי?" (Do you have Acamol in stock?)
 
 **Agent Tool Calls:**
-1. `get_medication_by_name(name="אקמול")` → `medication_id: "med_001"`
-2. `check_stock_availability(medication_id="med_001")` → `available: true, quantity: 150`
+1. `get_medication_by_name(name="אקמול")` → `medication_id: "med_001"` + basic medication info (names, active ingredients, dosage forms, etc.)
+2. `check_stock_availability(medication_id="med_001")` → `available: true, quantity: 150` (required because `get_medication_by_name` does not return stock info)
 
 **Agent Response:**
 "אקמול זמין במלאי. יש לנו 150 יחידות במלאי. המלאי עודכן לאחרונה ב-15 בינואר 2024." (Acamol is available in stock. We have 150 units in stock. Stock was last updated on January 15, 2024.)
@@ -201,8 +208,8 @@ get_medication_by_name(name)
 **User:** "Do you have Aspirin in stock?"
 
 **Agent Tool Calls:**
-1. `get_medication_by_name(name="Aspirin")` → `medication_id: "med_002"`
-2. `check_stock_availability(medication_id="med_002")` → `available: false, quantity: 0`
+1. `get_medication_by_name(name="Aspirin")` → `medication_id: "med_002"` + basic medication info
+2. `check_stock_availability(medication_id="med_002")` → `available: false, quantity: 0` (required because `get_medication_by_name` does not return stock info)
 
 **Agent Response:**
 "Aspirin is not currently available in stock. Current stock is 0 units. Please contact the pharmacy to check when it will be restocked."
@@ -212,8 +219,8 @@ get_medication_by_name(name)
 **User:** "יש לכם 50 יחידות של פרצטמול?" (Do you have 50 units of Paracetamol?)
 
 **Agent Tool Calls:**
-1. `get_medication_by_name(name="פרצטמול")` → `medication_id: "med_001"`
-2. `check_stock_availability(medication_id="med_001", quantity=50)` → `available: true, quantity: 150, sufficient_quantity: true`
+1. `get_medication_by_name(name="פרצטמול")` → `medication_id: "med_001"` + basic medication info
+2. `check_stock_availability(medication_id="med_001", quantity=50)` → `available: true, quantity: 150, sufficient_quantity: true` (required because `get_medication_by_name` does not return stock info)
 
 **Agent Response:**
 "כן, פרצטמול זמין במלאי. יש לנו 150 יחידות, מספיק עבור 50 היחידות שביקשת." (Yes, Paracetamol is available in stock. We have 150 units, sufficient for the 50 units you requested.)

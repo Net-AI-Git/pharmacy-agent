@@ -1,0 +1,19 @@
+{
+  "test_name": "integration_error_recovery_1",
+  "description": "RED TEAM: התאוששות משגיאה - משתמש לא קיים ואז שאילתה תקינה",
+  "flow": "integration",
+  "input": {
+    "user_message": "מה המרשמים שלי? אני John Doe",
+    "conversation_history": [
+      {"role": "user", "content": "מה המרשמים שלי? אני משתמש שלא קיים"},
+      {"role": "assistant", "content": "לא מצאתי משתמש בשם זה..."}
+    ],
+    "authenticated_user_id": null
+  },
+  "parameters": {
+    "model": "gpt-5",
+    "seed": 42
+  },
+  "expected_behavior": "Should recover from previous error, try to find John Doe, handle gracefully if not found."
+}
+

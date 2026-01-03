@@ -19,6 +19,7 @@ from typing import Dict, Any, List, Callable, Optional
 from app.tools.medication_tools import get_medication_by_name
 from app.tools.inventory_tools import check_stock_availability
 from app.tools.prescription_tools import check_prescription_requirement
+from app.tools.user_tools import get_user_by_name_or_email, get_user_prescriptions, check_user_prescription_for_medication, get_authenticated_user_info
 from app.security.rate_limiter import RateLimiter
 from app.security.audit_logger import AuditLogger
 from app.security.correlation import generate_correlation_id
@@ -37,6 +38,10 @@ _TOOL_FUNCTIONS: Dict[str, Callable] = {
     "get_medication_by_name": get_medication_by_name,
     "check_stock_availability": check_stock_availability,
     "check_prescription_requirement": check_prescription_requirement,
+    "get_user_by_name_or_email": get_user_by_name_or_email,
+    "get_user_prescriptions": get_user_prescriptions,
+    "check_user_prescription_for_medication": check_user_prescription_for_medication,
+    "get_authenticated_user_info": get_authenticated_user_info,
 }
 
 
@@ -166,6 +171,140 @@ def get_tools_for_openai() -> List[Dict[str, Any]]:
                     "required": ["medication_id"]
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_user_by_name_or_email",
+                "description": (
+                    "Search for a user by name or email address with case-insensitive partial matching support. "
+                    "This tool enables the AI agent to find users when they provide their name or email "
+                    "address instead of user_id. It supports natural language queries where users identify "
+                    "themselves by name or email, which is more user-friendly than requiring technical IDs. "
+                    "Returns user information including user_id (required for other user tools), name, email, "
+                    "and list of prescription IDs. If multiple users match, returns the first match. "
+                    "If no user is found, returns error with suggestions of similar names or emails."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name_or_email": {
+                            "type": "string",
+                            "description": (
+                                "The user name or email address to search for. "
+                                "Supports partial matches and case-insensitive search. "
+                                "Examples: 'John Doe', 'john.doe@example.com', 'john'"
+                            )
+                        }
+                    },
+                    "required": ["name_or_email"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_user_prescriptions",
+                "description": (
+                    "Get all prescriptions for a specific user by user_id. "
+                    "This tool enables the AI agent to retrieve all prescriptions associated with a user. "
+                    "This allows users to view their prescription history and verify prescription details. "
+                    "Returns complete prescription information including medication names (Hebrew and English), "
+                    "prescription dates, expiry dates, quantities, refills remaining, and status. "
+                    "Returns empty list if user has no prescriptions (this is not an error). "
+                    "The user_id is typically obtained from get_user_by_name_or_email."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "user_id": {
+                            "type": "string",
+                            "description": (
+                                "The unique identifier of the user to get prescriptions for. "
+                                "This is typically obtained from get_user_by_name_or_email. "
+                                "Example: 'user_001'"
+                            )
+                        }
+                    },
+                    "required": ["user_id"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "check_user_prescription_for_medication",
+                "description": (
+                    "Check if a user has an active prescription for a specific medication. "
+                    "This tool enables the AI agent to verify whether a user has an active prescription "
+                    "for a specific medication. This is essential for prescription validation before "
+                    "medication purchases and helps users understand their prescription status. "
+                    "Only returns active prescriptions (status='active'). Returns has_active_prescription=false "
+                    "if no active prescription found (this is not an error). "
+                    "The user_id is typically obtained from get_user_by_name_or_email, and medication_id "
+                    "is typically obtained from get_medication_by_name."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "user_id": {
+                            "type": "string",
+                            "description": (
+                                "The unique identifier of the user to check prescription for. "
+                                "This is typically obtained from get_user_by_name_or_email. "
+                                "Example: 'user_001'"
+                            )
+                        },
+                        "medication_id": {
+                            "type": "string",
+                            "description": (
+                                "The unique identifier of the medication to check prescription for. "
+                                "This is typically obtained from get_medication_by_name. "
+                                "Example: 'med_001'"
+                            )
+                        }
+                    },
+                    "required": ["user_id", "medication_id"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_authenticated_user_info",
+                "description": (
+                    "Get authenticated user information by username and password. "
+                    "This is the ONLY tool that retrieves personal user information from the database. "
+                    "It requires username and password authentication to ensure only the authenticated "
+                    "user can access their own information. This prevents unauthorized access to other "
+                    "users' data. Returns complete user information including user_id, name, email, "
+                    "and all prescriptions with full details. Use this tool when the user asks about "
+                    "'my prescriptions', 'my medical record', or 'my information'. "
+                    "IMPORTANT: This tool requires the authenticated user's username and password from the session. "
+                    "Never use this tool to access information about other users."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "username": {
+                            "type": "string",
+                            "description": (
+                                "The username (name or email) used for authentication. "
+                                "Must match the authenticated user's credentials from the session. "
+                                "Example: 'John Doe' or 'john.doe@example.com'"
+                            )
+                        },
+                        "password": {
+                            "type": "string",
+                            "description": (
+                                "The password for authentication. "
+                                "Must match the authenticated user's password from the session."
+                            )
+                        }
+                    },
+                    "required": ["username", "password"]
+                }
+            }
         }
     ]
 
@@ -232,7 +371,7 @@ def execute_tool(
     effective_correlation_id = correlation_id if correlation_id is not None else generate_correlation_id()
     
     # Check rate limit before executing
-    allowed, error_message = _rate_limiter.check_rate_limit(tool_name, effective_agent_id)
+    allowed, error_message = _rate_limiter.check_rate_limit(tool_name, effective_agent_id, effective_correlation_id)
     if not allowed:
         error_result = {
             "error": error_message,
@@ -267,6 +406,27 @@ def execute_tool(
         valid_params = set(sig.parameters.keys())
         filtered_arguments = {k: v for k, v in arguments.items() if k in valid_params}
         
+        # For user tools, add authenticated_user_id from context if available
+        user_tools = ["get_user_by_name_or_email", "get_user_prescriptions", "check_user_prescription_for_medication"]
+        if tool_name in user_tools and context and "authenticated_user_id" in context:
+            authenticated_user_id = context.get("authenticated_user_id")
+            if "authenticated_user_id" in valid_params:
+                filtered_arguments["authenticated_user_id"] = authenticated_user_id
+                logger.debug(f"Added authenticated_user_id to {tool_name}: {authenticated_user_id}")
+        
+        # For get_authenticated_user_info, add authenticated_username, authenticated_password, and authenticated_password_hash from context if available
+        if tool_name == "get_authenticated_user_info" and context:
+            if "authenticated_username" in context and "authenticated_username" in valid_params:
+                filtered_arguments["authenticated_username"] = context.get("authenticated_username")
+                logger.debug(f"Added authenticated_username to {tool_name}")
+            # If password is not provided by LLM, use it from context
+            if "password" not in filtered_arguments and "authenticated_password" in context and "password" in valid_params:
+                filtered_arguments["password"] = context.get("authenticated_password")
+                logger.debug(f"Added authenticated_password from context to {tool_name}")
+            if "authenticated_password_hash" in context and "authenticated_password_hash" in valid_params:
+                filtered_arguments["authenticated_password_hash"] = context.get("authenticated_password_hash")
+                logger.debug(f"Added authenticated_password_hash to {tool_name}")
+        
         # Log if any arguments were filtered out
         if len(filtered_arguments) < len(arguments):
             filtered_out = set(arguments.keys()) - set(filtered_arguments.keys())
@@ -276,7 +436,7 @@ def execute_tool(
         result = tool_function(**filtered_arguments)
         
         # Record the call for rate limit tracking (after successful execution)
-        _rate_limiter.record_call(tool_name, effective_agent_id)
+        _rate_limiter.record_call(tool_name, effective_agent_id, effective_correlation_id)
         
         # Determine status based on result content, not just execution success
         # Check if result contains an error field or success=False

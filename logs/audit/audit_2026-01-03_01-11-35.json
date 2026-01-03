@@ -1,1 +1,0 @@
-{"timestamp": "2026-01-03T01:11:50.097429", "correlation_id": "dfaee24d-6649-4c61-bd0b-80026ab23a07", "agent_id": "default", "event_type": "agent_action", "action": "message_received", "details": {"message": "תספר לי על אקמול"}, "status": "success"}

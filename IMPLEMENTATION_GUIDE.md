@@ -1021,9 +1021,9 @@ app = gr.ChatInterface(chat_fn)
    - תיאור: משתמש שואל על זמינות תרופה
    - Sequence:
      1. משתמש: "האם יש לכם אקמול במלאי?"
-     2. Agent קורא `get_medication_by_name("אקמול")`
-     3. Agent מקבל medication_id
-     4. Agent קורא `check_stock_availability(medication_id)`
+     2. Agent קורא `get_medication_by_name("אקמול")` - מקבל מידע בסיסי על התרופה (שם, רכיבים פעילים, הוראות מינון) ו-medication_id
+     3. **חשוב:** `get_medication_by_name` **לא מחזיר** מידע על מלאי - רק מידע בסיסי על התרופה
+     4. Agent קורא `check_stock_availability(medication_id)` - מקבל מידע על המלאי
      5. Agent משיב: "אקמול זמין במלאי. יש לנו X יחידות."
    - Trigger phrases: "יש לכם", "במלאי", "זמין"
 
@@ -1044,11 +1044,12 @@ app = gr.ChatInterface(chat_fn)
    - תיאור: משתמש שואל על דרישת מרשם וזמינות
    - Sequence:
      1. משתמש: "אני צריך אנטיביוטיקה, האם צריך מרשם?"
-     2. Agent קורא `get_medication_by_name("אנטיביוטיקה")`
-     3. אם מספר תוצאות - Agent מבקש הבהרה
-     4. Agent קורא `check_prescription_requirement(medication_id)`
-     5. Agent קורא `check_stock_availability(medication_id)`
-     6. Agent משיב: דרישת מרשם + זמינות
+     2. Agent קורא `get_medication_by_name("אנטיביוטיקה")` - מקבל מידע בסיסי על התרופה ו-medication_id
+     3. **חשוב:** `get_medication_by_name` **לא מחזיר** מידע על דרישת מרשם או מלאי - רק מידע בסיסי על התרופה
+     4. אם מספר תוצאות - Agent מבקש הבהרה
+     5. Agent קורא `check_prescription_requirement(medication_id)` - מקבל מידע על דרישת מרשם
+     6. Agent קורא `check_stock_availability(medication_id)` - מקבל מידע על המלאי (אם המשתמש שאל גם על זמינות)
+     7. Agent משיב: דרישת מרשם + זמינות (אם רלוונטי)
    - Trigger phrases: "צריך מרשם", "דורש מרשם"
 
 **איך לבדוק:**
@@ -1068,10 +1069,11 @@ app = gr.ChatInterface(chat_fn)
    - תיאור: משתמש מבקש מידע מלא על תרופה
    - Sequence:
      1. משתמש: "תספר לי על אקמול"
-     2. Agent קורא `get_medication_by_name("אקמול")`
-     3. Agent מציג: שם, רכיבים פעילים, צורות מינון
-     4. Agent קורא `check_prescription_requirement(medication_id)`
-     5. Agent מסכם: מידע מלא + אזהרות
+     2. Agent קורא `get_medication_by_name("אקמול")` - מקבל מידע בסיסי על התרופה (שם, רכיבים פעילים, צורות מינון, הוראות מינון ושימוש) ו-medication_id
+     3. **חשוב:** `get_medication_by_name` **לא מחזיר** מידע על דרישת מרשם או מלאי - רק מידע בסיסי על התרופה
+     4. Agent מציג: שם, רכיבים פעילים, צורות מינון, הוראות מינון ושימוש
+     5. אם המשתמש ביקש מידע מלא או אם רלוונטי - Agent קורא `check_prescription_requirement(medication_id)` ו-`check_stock_availability(medication_id)`
+     6. Agent מסכם: מידע מלא + אזהרות
    - Trigger phrases: "תספר לי", "מה זה", "מידע על"
 
 **איך לבדוק:**

@@ -55,12 +55,17 @@ The agent identifies that the user is requesting information about a medication 
 }
 ```
 
+**Important Notes:**
+- `get_medication_by_name` returns **basic medication information only** (names, active ingredients, dosage forms, instructions, description)
+- `get_medication_by_name` **does NOT return** prescription requirement or stock availability information
+- The `medication_id` from this response is **required** for calling `check_prescription_requirement` and `check_stock_availability` if needed
+
 **Error Handling:**
 - If medication is not found, the agent receives `MedicationSearchError` with suggestions
 - Agent displays the error and suggestions to the user
 
 ### Step 3: Display Basic Information
-The agent displays basic information about the medication from the `get_medication_by_name` result.
+The agent displays basic information about the medication from the `get_medication_by_name` result. This includes all the information returned by `get_medication_by_name`.
 
 **Basic information includes:**
 - Medication name (Hebrew and English)
@@ -71,7 +76,7 @@ The agent displays basic information about the medication from the `get_medicati
 - General description (description)
 
 ### Step 4: Check Prescription Requirement
-The agent checks the prescription requirement to provide comprehensive information.
+If the user requested complete information or if it's relevant, the agent checks the prescription requirement. **This step is required** because `get_medication_by_name` does not return prescription information.
 
 **Tool Call:**
 ```json
@@ -94,7 +99,7 @@ The agent checks the prescription requirement to provide comprehensive informati
 ```
 
 ### Step 5: Check Stock Availability (Optional)
-The agent can check stock availability to provide more comprehensive information, especially if the user explicitly asked about it or if it's relevant.
+The agent can check stock availability to provide more comprehensive information, especially if the user explicitly asked about it or if it's relevant. **This step is required** if stock information is needed, because `get_medication_by_name` does not return stock information.
 
 **Tool Call:**
 ```json
@@ -258,17 +263,20 @@ User Query
     ↓
 get_medication_by_name(name)
     ↓
-    ├─→ Medication found → Display basic info (name, active ingredients, dosage, etc.)
+    ├─→ Medication found → Get medication_id + basic info (name, active ingredients, dosage, etc.)
+    │                          (NO prescription or stock info)
     │                          ↓
-    │                      check_prescription_requirement(medication_id)
+    │                      Display basic info
     │                          ↓
-    │                      Prescription info retrieved
-    │                          ↓
-    │                      [If relevant] → check_stock_availability(medication_id)
-    │                                         ↓
-    │                                     Stock info retrieved
-    │                                         ↓
-    │                                     Agent provides comprehensive response
+    │                      [If complete info requested] → check_prescription_requirement(medication_id)
+    │                                                          ↓
+    │                                                      Prescription info retrieved
+    │                                                          ↓
+    │                                                      [If relevant] → check_stock_availability(medication_id)
+    │                                                                         ↓
+    │                                                                     Stock info retrieved
+    │                                                                         ↓
+    │                                                                     Agent provides comprehensive response
     │
     └─→ Medication not found → Agent responds with error + suggestions
 ```
@@ -280,9 +288,9 @@ get_medication_by_name(name)
 **User:** "תספר לי על אקמול" (Tell me about Acamol)
 
 **Agent Tool Calls:**
-1. `get_medication_by_name(name="אקמול")` → `medication_id: "med_001"` + all basic information
-2. `check_prescription_requirement(medication_id="med_001")` → `requires_prescription: false`
-3. `check_stock_availability(medication_id="med_001")` → `available: true, quantity: 150`
+1. `get_medication_by_name(name="אקמול")` → `medication_id: "med_001"` + basic information (names, active ingredients, dosage forms, instructions, description) - **NO prescription or stock info**
+2. `check_prescription_requirement(medication_id="med_001")` → `requires_prescription: false` (required because `get_medication_by_name` does not return prescription info)
+3. `check_stock_availability(medication_id="med_001")` → `available: true, quantity: 150` (required because `get_medication_by_name` does not return stock info)
 
 **Agent Response:**
 "אקמול (Acetaminophen) הוא משכך כאבים ומפחית חום.
@@ -314,7 +322,7 @@ get_medication_by_name(name)
 **User:** "What are the active ingredients in Acetaminophen?"
 
 **Agent Tool Calls:**
-1. `get_medication_by_name(name="Acetaminophen")` → `medication_id: "med_001"` + `active_ingredients: ["Paracetamol 500mg"]`
+1. `get_medication_by_name(name="Acetaminophen")` → `medication_id: "med_001"` + `active_ingredients: ["Paracetamol 500mg"]` + other basic info (NO prescription or stock info)
 
 **Agent Response:**
 "The active ingredient in Acetaminophen is Paracetamol 500mg. This is the main component that provides the medication's pain-relieving and fever-reducing effects."
@@ -324,9 +332,9 @@ get_medication_by_name(name)
 **User:** "מה זה אמוקסיצילין?" (What is Amoxicillin?)
 
 **Agent Tool Calls:**
-1. `get_medication_by_name(name="אמוקסיצילין")` → `medication_id: "med_003"` + all basic information
-2. `check_prescription_requirement(medication_id="med_003")` → `requires_prescription: true`
-3. `check_stock_availability(medication_id="med_003")` → `available: true, quantity: 75`
+1. `get_medication_by_name(name="אמוקסיצילין")` → `medication_id: "med_003"` + basic information (NO prescription or stock info)
+2. `check_prescription_requirement(medication_id="med_003")` → `requires_prescription: true` (required because `get_medication_by_name` does not return prescription info)
+3. `check_stock_availability(medication_id="med_003")` → `available: true, quantity: 75` (required because `get_medication_by_name` does not return stock info)
 
 **Agent Response:**
 "אמוקסיצילין (Amoxicillin) הוא אנטיביוטיקה המשמשת לטיפול בזיהומים חיידקיים.
@@ -357,7 +365,7 @@ get_medication_by_name(name)
 **User:** "What is Paracetamol used for?"
 
 **Agent Tool Calls:**
-1. `get_medication_by_name(name="Paracetamol")` → `medication_id: "med_001"` + `description: "Pain reliever and fever reducer"`
+1. `get_medication_by_name(name="Paracetamol")` → `medication_id: "med_001"` + `description: "Pain reliever and fever reducer"` + other basic info (NO prescription or stock info)
 
 **Agent Response:**
 "Paracetamol (Acetaminophen) is used as a pain reliever and fever reducer. It is commonly used to treat:

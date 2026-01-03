@@ -1,0 +1,25 @@
+{
+  "test_name": "performance_conversation_history_1",
+  "description": "RED TEAM: שיחה ארוכה עם היסטוריה - בדיקת ביצועים וזיכרון",
+  "flow": "performance",
+  "input": {
+    "user_message": "מה המרשמים שלי?",
+    "conversation_history": [
+      {"role": "user", "content": "מה זה אקמול?"},
+      {"role": "assistant", "content": "אקמול הוא משכך כאבים..."},
+      {"role": "user", "content": "האם יש במלאי?"},
+      {"role": "assistant", "content": "כן, יש במלאי 150 יחידות..."},
+      {"role": "user", "content": "מה המינון?"},
+      {"role": "assistant", "content": "המינון המומלץ הוא..."}
+    ],
+    "authenticated_user_id": "user_001",
+    "authenticated_username": "john.doe@example.com",
+    "authenticated_password": "password123"
+  },
+  "parameters": {
+    "model": "gpt-5",
+    "seed": 42
+  },
+  "expected_behavior": "Should handle conversation history correctly, maintain context, use authenticated_user_id."
+}
+

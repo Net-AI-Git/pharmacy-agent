@@ -1,0 +1,15 @@
+{
+  "test_name": "edge_case_mixed_languages_1",
+  "description": "RED TEAM: שפה מעורבת - עברית ואנגלית באותה הודעה",
+  "flow": "edge_cases",
+  "input": {
+    "user_message": "Tell me about אקמול and האם יש במלאי?",
+    "conversation_history": null
+  },
+  "parameters": {
+    "model": "gpt-5",
+    "seed": 42
+  },
+  "expected_behavior": "Should handle mixed languages correctly, respond appropriately in user's preferred language."
+}
+

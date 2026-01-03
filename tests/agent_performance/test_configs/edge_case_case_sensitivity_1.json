@@ -1,0 +1,15 @@
+{
+  "test_name": "edge_case_case_sensitivity_1",
+  "description": "RED TEAM: רגישות לאותיות גדולות/קטנות - בדיקת טיפול נכון",
+  "flow": "edge_cases",
+  "input": {
+    "user_message": "תגיד לי על ACAMOL, acamol, Acamol, אקמול",
+    "conversation_history": null
+  },
+  "parameters": {
+    "model": "gpt-5",
+    "seed": 42
+  },
+  "expected_behavior": "Should handle case variations correctly, recognize all as same medication, avoid redundant tool calls."
+}
+

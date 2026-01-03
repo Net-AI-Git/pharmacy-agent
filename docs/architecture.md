@@ -76,6 +76,7 @@ Implements business logic functions that can be called by the AI agent through O
 - `medication_tools.py`: Medication search functionality
 - `inventory_tools.py`: Stock availability checking
 - `prescription_tools.py`: Prescription requirement verification
+- `user_tools.py`: User search and prescription management
 - `registry.py`: Tool registration and execution routing
 
 **Key Features:**

@@ -56,6 +56,12 @@ def main():
         help="Run a specific test by name (without .json extension)"
     )
     parser.add_argument(
+        "--flow",
+        type=str,
+        choices=["flow1_stock_availability", "flow2_prescription", "flow3_information", "flow4_policy_adherence", "flow5_user_prescriptions", "all"],
+        help="Run all tests for a specific flow (flow1_stock_availability, flow2_prescription, flow3_information, flow4_policy_adherence, flow5_user_prescriptions) or 'all' for all flows"
+    )
+    parser.add_argument(
         "--list",
         action="store_true",
         help="List all available test configurations"
@@ -104,6 +110,37 @@ def main():
             logger.error(f"Test configuration not found: {test_config_path}")
             sys.exit(1)
         test_configs = [test_config_path]
+    elif args.flow:
+        # Run tests for a specific flow
+        if args.flow == "all":
+            # Run all flow tests (flow1, flow2, flow3, flow4, flow5)
+            test_configs = list(config_dir.glob("flow*.json"))
+        elif args.flow == "flow1_stock_availability":
+            # Flow 1: Stock Availability - match flow1_stock_*
+            test_configs = list(config_dir.glob("flow1_stock*.json"))
+        elif args.flow == "flow2_prescription":
+            # Flow 2: Prescription - match flow2_prescription_*
+            test_configs = list(config_dir.glob("flow2_prescription*.json"))
+        elif args.flow == "flow3_information":
+            # Flow 3: Information - match flow3_information_*
+            test_configs = list(config_dir.glob("flow3_information*.json"))
+        elif args.flow == "flow4_policy_adherence":
+            # Flow 4: Policy Adherence - match flow4_policy_adherence_*
+            test_configs = list(config_dir.glob("flow4_policy_adherence*.json"))
+        elif args.flow == "flow5_user_prescriptions":
+            # Flow 5: User Prescriptions - match flow5_user_prescriptions_*
+            test_configs = list(config_dir.glob("flow5_user_prescriptions*.json"))
+        else:
+            logger.error(f"Unknown flow: {args.flow}")
+            sys.exit(1)
+        
+        if not test_configs:
+            logger.warning(f"No test configurations found for flow: {args.flow} in {config_dir}")
+            sys.exit(0)
+        
+        # Sort tests for consistent execution order
+        test_configs.sort()
+        logger.info(f"Found {len(test_configs)} tests for flow: {args.flow}")
     else:
         # Run all tests
         test_configs = list(config_dir.glob("*.json"))
@@ -187,32 +224,74 @@ def main():
                 "error": str(e)
             })
     
+    # Group results by flow for better analysis
+    flow_groups = {}
+    for summary in results_summary:
+        test_name = summary.get("test_name", "")
+        # Extract flow from test name
+        if test_name.startswith("flow1_"):
+            flow = "Flow 1: Stock Availability"
+        elif test_name.startswith("flow2_"):
+            flow = "Flow 2: Prescription"
+        elif test_name.startswith("flow3_"):
+            flow = "Flow 3: Information"
+        elif test_name.startswith("flow4_"):
+            flow = "Flow 4: Policy Adherence"
+        elif test_name.startswith("flow5_"):
+            flow = "Flow 5: User Prescriptions"
+        else:
+            flow = "Other Tests"
+        
+        if flow not in flow_groups:
+            flow_groups[flow] = []
+        flow_groups[flow].append(summary)
+    
     # Print summary
     print("\n" + "=" * 60)
     print("Test Execution Summary")
     print("=" * 60)
     print(f"Run Directory: {run_dir_name}")
     print(f"Results Location: {run_dir_path}")
+    if args.flow:
+        print(f"Flow Filter: {args.flow}")
     print("=" * 60)
     
-    for summary in results_summary:
-        if summary["status"] == "success":
-            print(f"\n✓ {summary['test_name']}")
-            print(f"  API Calls: {summary['api_calls']}")
-            print(f"  Tool Calls: {summary['tool_calls']}")
-            print(f"  Time: {summary['time']:.3f}s")
-            if summary.get("efficiency_score") is not None:
-                print(f"  Efficiency Score: {summary['efficiency_score']}/100")
-            if summary.get("estimated_cost") is not None:
-                print(f"  Estimated Cost: ${summary['estimated_cost']:.6f}")
-            if summary.get("total_tokens") is not None:
-                print(f"  Total Tokens: {summary['total_tokens']:,}")
-            print(f"  Results: {summary['json_path']}")
-        else:
-            print(f"\n✗ {summary['test_name']}")
-            print(f"  Error: {summary.get('error', 'Unknown error')}")
+    # Print summary by flow
+    for flow_name, flow_tests in sorted(flow_groups.items()):
+        print(f"\n{flow_name} ({len(flow_tests)} tests):")
+        print("-" * 60)
+        
+        success_count = sum(1 for t in flow_tests if t["status"] == "success")
+        error_count = len(flow_tests) - success_count
+        
+        for summary in flow_tests:
+            if summary["status"] == "success":
+                print(f"  ✓ {summary['test_name']}")
+                print(f"    API Calls: {summary['api_calls']}")
+                print(f"    Tool Calls: {summary['tool_calls']}")
+                print(f"    Time: {summary['time']:.3f}s")
+                if summary.get("efficiency_score") is not None:
+                    print(f"    Efficiency Score: {summary['efficiency_score']}/100")
+                if summary.get("estimated_cost") is not None:
+                    print(f"    Estimated Cost: ${summary['estimated_cost']:.6f}")
+                if summary.get("total_tokens") is not None:
+                    print(f"    Total Tokens: {summary['total_tokens']:,}")
+            else:
+                print(f"  ✗ {summary['test_name']}")
+                print(f"    Error: {summary.get('error', 'Unknown error')}")
+        
+        print(f"\n  Flow Summary: {success_count} passed, {error_count} failed")
+    
+    # Overall summary
+    total_tests = len(results_summary)
+    total_success = sum(1 for s in results_summary if s["status"] == "success")
+    total_errors = total_tests - total_success
     
     print("\n" + "=" * 60)
+    print(f"Overall Summary: {total_success}/{total_tests} tests passed")
+    if total_errors > 0:
+        print(f"⚠️  {total_errors} test(s) failed")
+    print("=" * 60)
     
     # Generate comparison report
     try:

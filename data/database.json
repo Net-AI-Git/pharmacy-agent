@@ -4,60 +4,70 @@
       "user_id": "user_001",
       "name": "John Doe",
       "email": "john.doe@example.com",
+      "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
       "prescriptions": ["prescription_001"]
     },
     {
       "user_id": "user_002",
       "name": "Jane Smith",
       "email": "jane.smith@example.com",
+      "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
       "prescriptions": ["prescription_002"]
     },
     {
       "user_id": "user_003",
       "name": "Michael Johnson",
       "email": "michael.johnson@example.com",
+      "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
       "prescriptions": ["prescription_003"]
     },
     {
       "user_id": "user_004",
       "name": "Sarah Williams",
       "email": "sarah.williams@example.com",
+      "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
       "prescriptions": ["prescription_004"]
     },
     {
       "user_id": "user_005",
       "name": "David Brown",
       "email": "david.brown@example.com",
+      "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
       "prescriptions": ["prescription_005"]
     },
     {
       "user_id": "user_006",
       "name": "Emily Davis",
       "email": "emily.davis@example.com",
+      "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
       "prescriptions": []
     },
     {
       "user_id": "user_007",
       "name": "Robert Miller",
       "email": "robert.miller@example.com",
+      "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
       "prescriptions": []
     },
     {
       "user_id": "user_008",
       "name": "Lisa Wilson",
       "email": "lisa.wilson@example.com",
+      "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
       "prescriptions": []
     },
     {
       "user_id": "user_009",
       "name": "James Moore",
       "email": "james.moore@example.com",
+      "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
       "prescriptions": []
     },
     {
       "user_id": "user_010",
       "name": "Mary Taylor",
       "email": "mary.taylor@example.com",
+      "password_hash": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
       "prescriptions": []
     }
   ],

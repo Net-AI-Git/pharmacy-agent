@@ -92,7 +92,8 @@ class TracedStreamingAgent:
     def stream_response(
         self,
         user_message: str,
-        conversation_history: Optional[List[Dict[str, str]]] = None
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        context: Optional[Dict[str, Any]] = None
     ) -> Generator[str, None, None]:
         """
         Stream agent response while capturing all trace data.
@@ -388,12 +389,16 @@ class TracedStreamingAgent:
                                         break
                             # #endregion
                             
-                            # Build context for audit logging
-                            context = {
+                            # Build context for audit logging and tool execution
+                            # Merge with provided context (e.g., authenticated_user_id)
+                            tool_context = {
                                 "test_trace": True,
                                 "iteration": iteration,
                                 "tool_call_id": tool_id
                             }
+                            # Merge with provided context if available
+                            if context:
+                                tool_context.update(context)
                             
                             # Execute the tool with correlation ID for audit logging
                             tool_result = execute_tool(
@@ -401,7 +406,7 @@ class TracedStreamingAgent:
                                 arguments=arguments,
                                 agent_id="test_agent",
                                 correlation_id=correlation_id,
-                                context=context
+                                context=tool_context
                             )
                             
                             tool_exec_time = time.time() - tool_exec_start

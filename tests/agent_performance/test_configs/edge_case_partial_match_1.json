@@ -1,0 +1,15 @@
+{
+  "test_name": "edge_case_partial_match_1",
+  "description": "RED TEAM: התאמה חלקית - בדיקת fuzzy matching",
+  "flow": "edge_cases",
+  "input": {
+    "user_message": "תגיד לי על אקמ, אקמול, אקמולל",
+    "conversation_history": null
+  },
+  "parameters": {
+    "model": "gpt-5",
+    "seed": 42
+  },
+  "expected_behavior": "Should handle partial matches correctly, find medication, avoid redundant calls."
+}
+

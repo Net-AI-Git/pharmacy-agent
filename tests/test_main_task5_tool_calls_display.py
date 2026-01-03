@@ -456,13 +456,19 @@ class TestToolCallsDisplayUIComponent:
         
         # Note: We can't directly access components from Blocks,
         # but we verify the interface is created successfully
-        interface = create_chat_interface()
+        result = create_chat_interface()
         
         # Assert
-        assert interface is not None, \
+        assert result is not None, \
             f"{FAIL} Expected interface to be created, got None"
-        assert isinstance(interface, gr.Blocks), \
-            f"{FAIL} Expected gr.Blocks instance, got {type(interface)}"
+        # create_chat_interface returns a tuple (app, theme, css) in newer versions
+        if isinstance(result, tuple):
+            interface, theme, css = result
+            assert isinstance(interface, gr.Blocks), \
+                f"{FAIL} Expected gr.Blocks instance in tuple, got {type(interface)}"
+        else:
+            assert isinstance(result, gr.Blocks), \
+                f"{FAIL} Expected gr.Blocks instance, got {type(result)}"
         print(f"{PASS} Tool calls display component exists in interface")
     
     def test_tool_calls_display_accepts_json_data(self):

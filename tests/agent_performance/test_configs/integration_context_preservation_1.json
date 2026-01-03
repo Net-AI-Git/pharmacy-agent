@@ -1,0 +1,22 @@
+{
+  "test_name": "integration_context_preservation_1",
+  "description": "RED TEAM: שמירת הקשר בשיחה ארוכה - בדיקת זיכרון",
+  "flow": "integration",
+  "input": {
+    "user_message": "מה המינון של התרופה שדיברנו עליה קודם?",
+    "conversation_history": [
+      {"role": "user", "content": "תגיד לי על אקמול"},
+      {"role": "assistant", "content": "אקמול הוא משכך כאבים..."},
+      {"role": "user", "content": "מה המינון?"},
+      {"role": "assistant", "content": "המינון הוא 500-1000mg..."},
+      {"role": "user", "content": "תודה"},
+      {"role": "assistant", "content": "בבקשה"}
+    ]
+  },
+  "parameters": {
+    "model": "gpt-5",
+    "seed": 42
+  },
+  "expected_behavior": "Should maintain context from conversation history, understand 'התרופה שדיברנו עליה' refers to Acamol."
+}
+

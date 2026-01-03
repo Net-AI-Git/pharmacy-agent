@@ -122,10 +122,11 @@ class RateLimiter:
         self._minute_calls: Dict[Tuple[str, str], list] = defaultdict(list)
         self._day_calls: Dict[Tuple[str, str], list] = defaultdict(list)
         
-        # Tracking consecutive calls: (agent_id) -> (tool_name, count)
-        self._consecutive_calls: Dict[str, Tuple[str, int]] = {}
+        # Tracking consecutive calls: (correlation_id, tool_name) -> count
+        # Uses correlation_id instead of agent_id to prevent cross-request blocking
+        self._consecutive_calls: Dict[Tuple[str, str], int] = {}
         
-        # Track last tool called per agent
+        # Track last tool called per correlation_id
         self._last_tool: Dict[str, str] = {}
         
         # Thread lock for thread-safe concurrent access
@@ -168,7 +169,12 @@ class RateLimiter:
         # Filter out old entries
         self._minute_calls[key] = [ts for ts in calls_list if ts > cutoff_time]
     
-    def check_rate_limit(self, tool_name: str, agent_id: str = "default") -> Tuple[bool, Optional[str]]:
+    def check_rate_limit(
+        self, 
+        tool_name: str, 
+        agent_id: str = "default",
+        correlation_id: Optional[str] = None
+    ) -> Tuple[bool, Optional[str]]:
         """
         Check if a tool call is allowed under rate limits.
         
@@ -181,9 +187,9 @@ class RateLimiter:
         
         Implementation (What):
         Checks three types of limits:
-        1. Per-minute limit: Counts calls in the last 60 seconds
-        2. Per-day limit: Counts calls in the last 24 hours
-        3. Consecutive limit: Tracks consecutive calls to the same tool
+        1. Per-minute limit: Counts calls in the last 60 seconds (by agent_id)
+        2. Per-day limit: Counts calls in the last 24 hours (by agent_id)
+        3. Consecutive limit: Tracks consecutive calls to the same tool (by correlation_id)
         
         Uses sliding window approach - cleans old entries before checking.
         All state access is protected by threading.Lock to ensure thread-safety
@@ -193,8 +199,11 @@ class RateLimiter:
         Args:
             tool_name: Name of the tool to check
             agent_id: Identifier for the agent/session making the call.
-                Defaults to "default" for stateless agents.
+                Used for per-minute and per-day limits. Defaults to "default" for stateless agents.
                 Can be session ID or user ID in future implementations.
+            correlation_id: Optional correlation ID for the request/conversation.
+                Used for consecutive limit tracking. If None, uses agent_id as fallback.
+                This prevents cross-request blocking when multiple requests use same agent_id.
         
         Returns:
             Tuple of (is_allowed: bool, error_message: Optional[str]).
@@ -203,7 +212,7 @@ class RateLimiter:
         
         Example:
             >>> limiter = RateLimiter()
-            >>> allowed, error = limiter.check_rate_limit("get_medication_by_name", "session_123")
+            >>> allowed, error = limiter.check_rate_limit("get_medication_by_name", "session_123", "corr_456")
             >>> if not allowed:
             ...     print(f"Rate limit exceeded: {error}")
         """
@@ -240,44 +249,43 @@ class RateLimiter:
                 logger.warning(f"Rate limit exceeded for {tool_name} by {agent_id}: per-day limit")
                 return False, error_msg
             
-            # Check consecutive limit
-            last_tool = self._last_tool.get(agent_id)
+            # Check consecutive limit using correlation_id (or agent_id as fallback)
+            # This prevents cross-request blocking when multiple requests share same agent_id
+            effective_correlation_id = correlation_id if correlation_id is not None else agent_id
+            consecutive_key = (effective_correlation_id, tool_name)
+            
+            last_tool = self._last_tool.get(effective_correlation_id)
             if last_tool == tool_name:
                 # Same tool as last call - increment consecutive counter
-                current_tool, count = self._consecutive_calls.get(agent_id, (tool_name, 0))
-                if current_tool == tool_name:
-                    count += 1
-                    if count >= self.consecutive_limit:
-                        error_msg = (
-                            f"Rate limit exceeded: {count} consecutive calls to '{tool_name}' "
-                            f"(limit: {self.consecutive_limit}). "
-                            f"This may indicate an infinite loop. Please check your request."
-                        )
-                        logger.warning(
-                            f"Rate limit exceeded for {tool_name} by {agent_id}: "
-                            f"consecutive limit ({count} calls)"
-                        )
-                        return False, error_msg
-                    self._consecutive_calls[agent_id] = (tool_name, count)
-                else:
-                    # Different tool - reset counter
-                    self._consecutive_calls[agent_id] = (tool_name, 1)
+                count = self._consecutive_calls.get(consecutive_key, 0) + 1
+                if count >= self.consecutive_limit:
+                    error_msg = (
+                        f"Rate limit exceeded: {count} consecutive calls to '{tool_name}' "
+                        f"(limit: {self.consecutive_limit}). "
+                        f"This may indicate an infinite loop. Please check your request."
+                    )
+                    logger.warning(
+                        f"Rate limit exceeded for {tool_name} by correlation_id '{effective_correlation_id}': "
+                        f"consecutive limit ({count} calls)"
+                    )
+                    return False, error_msg
+                self._consecutive_calls[consecutive_key] = count
             else:
                 # Different tool or first call - reset consecutive counter
-                if last_tool is not None:
-                    # Reset counter for new tool
-                    self._consecutive_calls[agent_id] = (tool_name, 1)
-                else:
-                    # First call for this agent
-                    self._consecutive_calls[agent_id] = (tool_name, 1)
+                self._consecutive_calls[consecutive_key] = 1
             
-            # Update last tool
-            self._last_tool[agent_id] = tool_name
+            # Update last tool for this correlation_id
+            self._last_tool[effective_correlation_id] = tool_name
             
             # All checks passed
             return True, None
     
-    def record_call(self, tool_name: str, agent_id: str = "default") -> None:
+    def record_call(
+        self, 
+        tool_name: str, 
+        agent_id: str = "default",
+        correlation_id: Optional[str] = None
+    ) -> None:
         """
         Record a tool call for rate limit tracking.
         
@@ -296,7 +304,9 @@ class RateLimiter:
         Args:
             tool_name: Name of the tool that was called
             agent_id: Identifier for the agent/session making the call.
-                Defaults to "default" for stateless agents.
+                Used for per-minute and per-day limits. Defaults to "default" for stateless agents.
+            correlation_id: Optional correlation ID for the request/conversation.
+                Used for consecutive limit tracking. If None, uses agent_id as fallback.
         
         Returns:
             None. Updates internal tracking structures with the tool call timestamp.
@@ -306,9 +316,9 @@ class RateLimiter:
         
         Example:
             >>> limiter = RateLimiter()
-            >>> allowed, error = limiter.check_rate_limit("get_medication_by_name", "session_123")
+            >>> allowed, error = limiter.check_rate_limit("get_medication_by_name", "session_123", "corr_456")
             >>> if allowed:
-            ...     limiter.record_call("get_medication_by_name", "session_123")
+            ...     limiter.record_call("get_medication_by_name", "session_123", "corr_456")
             ...     # Execute tool...
         """
         with self._lock:
@@ -319,5 +329,6 @@ class RateLimiter:
             self._minute_calls[key].append(current_time)
             self._day_calls[key].append(current_time)
             
-            logger.debug(f"Recorded tool call: {tool_name} by {agent_id} at {current_time}")
+            effective_correlation_id = correlation_id if correlation_id is not None else agent_id
+            logger.debug(f"Recorded tool call: {tool_name} by {agent_id} (correlation_id: {effective_correlation_id}) at {current_time}")
 
